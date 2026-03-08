@@ -5,6 +5,7 @@ import altair as alt
 st.title("KnockOut-Investitions Simulation auf Indizes", anchor="title")
 
 top = st.container(border=True)
+mid = st.container(border=True)
 bottom = st.container(border=True)
 
 
@@ -22,6 +23,13 @@ with bottom:
         "Wähle einen Index aus:",
         ["DAX", "S&P 500", "FSTE China 50"]
     )
+
+    selected_budget = st.radio(
+        "Budget",
+        ["500", "1000"]
+    )
+    selected_budget = float(selected_budget)
+    remaining_budget = selected_budget
 
 
 with top:
@@ -53,6 +61,8 @@ with top:
         if df_all_index.loc[i, "index_investpoint"] and not is_invested:
             active_investment = df_all_index.loc[i, "index_wert"]
             is_invested = True
+            if (remaining_budget > 0) :
+                remaining_budget = remaining_budget * 0.8
             df_all_index.loc[i, "current_invest_wert"] = active_investment
             continue
 
@@ -100,12 +110,14 @@ with top:
         (line_index + line_knockout + line_invest),
         use_container_width=True
     )
+  
 
+with mid:
 
     st.subheader("Aktuelle Kennzahlen")
     
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1: 
         # Aktueller Kurs
@@ -127,4 +139,6 @@ with top:
 
     with col4:
         st.metric("Knockouts", knockout_count, "Test")
-  
+
+    with col5:
+        st.metric("Remaining Budget", remaining_budget, "Test")
