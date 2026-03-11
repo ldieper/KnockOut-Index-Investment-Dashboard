@@ -63,6 +63,8 @@ with top:
     df_all_index['current_invest_wert'] = 0.0
     knockout_count = 0
 
+    rendite = 0.0
+    index_investpoint_wert = 0.0
     active_investment = 0.0
     is_invested = False  
 
@@ -78,6 +80,7 @@ with top:
             active_investment = df_all_index.loc[i, "index_wert"]   
             remaining_budget = remaining_budget * 0.8
             df_all_index.loc[i, "current_invest_wert"] = active_investment
+            index_investpoint_wert =  df_all_index.loc[i, "index_wert"]
             continue
 
         if is_invested:
@@ -94,6 +97,10 @@ with top:
                 active_investment = 0.0
                 is_invested = False
 
+            if df_all_index.loc[i,  "calculated_hebel"] <= 1.5:
+                is_invested = False,
+                rendite = round(active_investment - index_investpoint_wert, 3)
+
             df_all_index.loc[i, "current_invest_wert"] = active_investment
 
 
@@ -104,7 +111,7 @@ with top:
 
     chart = alt.Chart(df_all_index)
 
-    line_index = chart.mark_line(color="aqua").encode(
+    line_index = chart.mark_line(color="#BA2BAC").encode(
        x=alt.X(
         "zeit:T",
         title="Zeit",
@@ -115,12 +122,12 @@ with top:
         y=alt.Y("index_wert:Q", title="Kurs")
     )
 
-    line_knockout = chart.mark_line(color="red").encode(
+    line_knockout = chart.mark_line(color="#c4265e").encode(
         x="zeit:T",
         y="calculated_knockout_barrier:Q"
     )
 
-    line_invest = chart.mark_line(color="yellow").encode(
+    line_invest = chart.mark_line(color="#e2e22e").encode(
         x="zeit:T",
         y="current_invest_wert:Q"
     )
@@ -154,10 +161,7 @@ with mid:
         st.metric("KnockOut", current_knockout, "Test" )
 
     with col3:
-        # Buy In
-        first_index_wert = df_all_index.groupby("index_name")["index_wert"].first().round(3)
-        first_index_wert = float(first_index_wert[selected_index])
-        st.metric("Buy In", (first_index_wert), "Test")
+        st.metric("Rendite", rendite, "Test")
 
     with col4:
         st.metric("Knockouts", knockout_count, "Test")
