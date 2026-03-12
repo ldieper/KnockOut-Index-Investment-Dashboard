@@ -44,9 +44,12 @@ with top:
 
     df_all_index = pd.read_csv("TestIndexRND.csv")
 
+    print(df_all_index.head(10))
+    print(df_all_index["zeit"].head(10))
+
     df_all_index["zeit"] = pd.to_datetime(
         df_all_index["zeit"],
-        format="%y-%m-%d"
+        format="%d-%m-%y"
     )
 
     df_all_index = df_all_index[
@@ -57,13 +60,13 @@ with top:
     df_all_index["index_investpoint"] = df_all_index["index_growth"] <= -0.05
        
 
-    df_all_index["calculated_hebel"] = 0.0
-    df_all_index["calculated_knockout_barrier"] = 0.0
+    df_all_index["calculated_hebel"] = None
+    df_all_index["calculated_knockout_barrier"] = None
 
-    df_all_index['current_invest_wert'] = 0.0
+    df_all_index['current_invest_wert'] = None
     knockout_count = 0
 
-    rendite = 0.0
+    rendite = None
     index_investpoint_wert = 0.0
     active_investment = 0.0
     is_invested = False  
@@ -73,31 +76,37 @@ with top:
 
     for i in range (1, len(df_all_index)):
 
-        df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / df_all_index.loc[i-1, "calculated_hebel"]) * (1 + 0.04/365)
 
         if df_all_index.loc[i, "index_investpoint"] and not is_invested and remaining_budget > 0:
             is_invested = True
-            active_investment = df_all_index.loc[i, "index_wert"]   
+            active_investment = df_all_index.loc[i, "index_wert"]  
+            df_all_index.loc[i, "calculated_knockout_barrier"] = 0.0
+            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel) # Kosten erst ab Tag 2
             remaining_budget = remaining_budget * 0.8
             df_all_index.loc[i, "current_invest_wert"] = active_investment
             index_investpoint_wert =  df_all_index.loc[i, "index_wert"]
             continue
 
         if is_invested:
+            knockout_daily_increase = df_all_index.loc[i-1, "calculated_knockout_barrier"]*5
+            knockout_daily_increase = round(knockout_daily_increase/36000, 3)
+            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i-1, "calculated_knockout_barrier"] + knockout_daily_increase
 
-            df_all_index.loc[i, "calculated_hebel"] = df_all_index.loc[i, "index_wert"] / (df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"])
+            df_all_index.loc[i, "calculated_hebel"] = (df_all_index.loc[i, "index_wert"] /
+                                                       (df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]) )
 
             df_all_index["index_growth_with_hebel"] = (
                 df_all_index["index_growth"] * df_all_index["calculated_hebel"]
                 )
-            active_investment += df_all_index.loc[i, "index_growth_with_hebel"]
+            active_investment = active_investment * (1 + df_all_index.loc[i, "index_growth_with_hebel"])
 
-            if active_investment <= df_all_index.loc[i, "calculated_knockout_barrier"] and is_invested:
+            if df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"] and is_invested:
                 knockout_count += 1
+                df_all_index.loc[i, "calculated_knockout_barrier"] = None
                 active_investment = 0.0
                 is_invested = False
 
-            if df_all_index.loc[i,  "calculated_hebel"] <= 1.5:
+            if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
                 is_invested = False,
                 rendite = round(active_investment - index_investpoint_wert, 3)
 
@@ -146,26 +155,22 @@ with mid:
     st.subheader("Aktuelle Kennzahlen")
     
 
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3 = st.columns(3)
 
-    with col1: 
-        # Aktueller Kurs
+    with col1:
         current_index_wert = df_all_index.groupby("index_name")["index_wert"].last().round(3)
         current_index_wert = float(current_index_wert[selected_index])
         st.metric("Kurs", (current_index_wert), "Test")
 
+        st.metric("Remaining Budget", remaining_budget, "Test")
+
     with col2:
-        # Aktuelle KnockOut Grenze
         current_knockout = df_all_index["calculated_knockout_barrier"].iloc[-1]
         current_knockout = float(round(current_knockout, 3))    
         st.metric("KnockOut", current_knockout, "Test" )
 
-    with col3:
-        st.metric("Rendite", rendite, "Test")
-
-    with col4:
         st.metric("Knockouts", knockout_count, "Test")
 
-    with col5:
-        st.metric("Remaining Budget", remaining_budget, "Test")
+    with col3:
+        st.metric("Rendite", rendite, "Test")
         
