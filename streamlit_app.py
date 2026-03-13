@@ -9,7 +9,6 @@ mid = st.container(border=True)
 bottom = st.container(border=True)
 
 
-
 with bottom:
     
     st.subheader("Aktuelle Regler")
@@ -38,14 +37,10 @@ with bottom:
         remaining_budget = selected_budget
         
 
-
 with top:
     st.subheader(f"Kursverlauf - {selected_index}")
 
     df_all_index = pd.read_csv("TestIndexRND.csv")
-
-    print(df_all_index.head(10))
-    print(df_all_index["zeit"].head(10))
 
     df_all_index["zeit"] = pd.to_datetime(
         df_all_index["zeit"],
@@ -76,41 +71,44 @@ with top:
 
     for i in range (1, len(df_all_index)):
 
+        if is_invested:
+            prev_knockout_barrier = df_all_index.loc[i-1, "calculated_knockout_barrier"]
+
+            
+            knockout_daily_increase = (prev_knockout_barrier * 5) / 36000
+            df_all_index.loc[i, "calculated_knockout_barrier"] = round(prev_knockout_barrier + knockout_daily_increase, 3)
+
+
+            if df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]:
+                df_all_index.loc[i, "current_invest_wert"] = 0.0
+                df_all_index.loc[i, "calculated_hebel"] = 0
+                active_investment = 0.0
+                is_invested = False
+                knockout_count += 1
+                continue
+
+            abstand = df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]
+            if abstand > 0:
+                df_all_index.loc[i, "calculated_hebel"] = df_all_index.loc[i, "index_wert"] / abstand
+            else:   
+                df_all_index.loc[i, "calculated_hebel"] = 0
+
+            current_growth = 1 + (df_all_index.loc[i, "index_growth"] * df_all_index.loc[i, "calculated_hebel"])
+            active_investment = max(0.0, active_investment * current_growth)
+            df_all_index.loc[i, "current_invest_wert"] = active_investment
+
+
+            if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
+                rendite = round(active_investment - index_investpoint_wert, 3)
+                is_invested = False
 
         if df_all_index.loc[i, "index_investpoint"] and not is_invested and remaining_budget > 0:
             is_invested = True
-            active_investment = df_all_index.loc[i, "index_wert"]  
-            df_all_index.loc[i, "calculated_knockout_barrier"] = 0.0
-            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel) # Kosten erst ab Tag 2
+            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel)
             remaining_budget = remaining_budget * 0.8
+            active_investment = df_all_index.loc[i, "index_wert"]  
             df_all_index.loc[i, "current_invest_wert"] = active_investment
-            index_investpoint_wert =  df_all_index.loc[i, "index_wert"]
-            continue
-
-        if is_invested:
-            knockout_daily_increase = df_all_index.loc[i-1, "calculated_knockout_barrier"]*5
-            knockout_daily_increase = round(knockout_daily_increase/36000, 3)
-            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i-1, "calculated_knockout_barrier"] + knockout_daily_increase
-
-            df_all_index.loc[i, "calculated_hebel"] = (df_all_index.loc[i, "index_wert"] /
-                                                       (df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]) )
-
-            df_all_index["index_growth_with_hebel"] = (
-                df_all_index["index_growth"] * df_all_index["calculated_hebel"]
-                )
-            active_investment = active_investment * (1 + df_all_index.loc[i, "index_growth_with_hebel"])
-
-            if df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"] and is_invested:
-                knockout_count += 1
-                df_all_index.loc[i, "calculated_knockout_barrier"] = None
-                active_investment = 0.0
-                is_invested = False
-
-            if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
-                is_invested = False,
-                rendite = round(active_investment - index_investpoint_wert, 3)
-
-            df_all_index.loc[i, "current_invest_wert"] = active_investment
+            index_investpoint_wert = df_all_index.loc[i, "index_wert"]
 
 
 
@@ -147,8 +145,6 @@ with top:
         use_container_width=True
     )
 
-
-  
 
 with mid:
 
