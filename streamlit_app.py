@@ -45,29 +45,22 @@ with top:
 with top:
     st.subheader(f"Kursverlauf - {selected_index}")
 
-    df_yf_DAX = pd.read_json("yfinance_indizes/^GDAXI.json", orient="index")
-    df_yf_GSPC = pd.read_json("yfinance_indizes/^GSPC.json", orient="index")
-    df_yf_XINO = pd.read_json("yfinance_indizes/XINO.FGI.json", orient="index")
+# Mapping von Auswahl-Namen zu Dateipfaden
+    index_map = {
+        "DAX": "yfinance_indizes/^GDAXI.json",
+        "S&P 500": "yfinance_indizes/^GSPC.json",
+        "FSTE China 50": "yfinance_indizes/^HSI.json"
+    }
 
-
-    if selected_index == "DAX" :
-        df_yf = df_yf_DAX
-    
-    if selected_index == "S&P 500" :
-        df_yf = df_yf_GSPC
-
-    if selected_index == "FSTE China 50" :
-        df_yf = df_yf_XINO
+    selected_file = index_map[selected_index]
+    df_yf = pd.read_json(selected_file, orient="index")
 
     df_yf.index = pd.to_datetime(df_yf.index)
     
     df_yf.columns = ["index_wert"]
     df_yf.index.name = "zeit"
-    
 
     df_all_index = df_yf.reset_index()
-
-
 
 
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
@@ -173,11 +166,10 @@ with mid:
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        current_index_wert = df_all_index.groupby("index_name")["index_wert"].last().round(3)
-        current_index_wert = float(current_index_wert[selected_index])
-        st.metric("Kurs", (current_index_wert), "Test")
+        current_index_wert = float(df_all_index["index_wert"].iloc[-1])
+        st.metric("Kurs", round(current_index_wert, 3), "Aktuell")
 
-        st.metric("Remaining Budget", remaining_budget, "Test")
+        st.metric("Remaining Budget", round(remaining_budget, 2), "Test")
 
     with col2:
         current_knockout = df_all_index["calculated_knockout_barrier"].iloc[-1]

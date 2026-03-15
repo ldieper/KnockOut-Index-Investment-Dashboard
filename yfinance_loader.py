@@ -1,6 +1,6 @@
 import yfinance as yf
 
-def download(tickers=["^GDAXI", "^GSPC", "XIN0.FGI"]):
+def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
     for ticker in tickers:
         df = yf.download(
             ticker,
