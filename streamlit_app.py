@@ -9,6 +9,8 @@ mid = st.container(border=True)
 bottom = st.container(border=True)
 
 
+
+
 with bottom:
     
     st.subheader("Aktuelle Regler")
@@ -40,19 +42,36 @@ with bottom:
 with top:
     st.subheader(f"Kursverlauf - {selected_index}")
 
-    df_all_index = pd.read_csv("TestIndexRND.csv")
+with top:
+    st.subheader(f"Kursverlauf - {selected_index}")
 
-    df_all_index["zeit"] = pd.to_datetime(
-        df_all_index["zeit"],
-        format="%d-%m-%y"
-    )
+    df_yf_DAX = pd.read_json("yfinance_indizes/^GDAXI.json", orient="index")
+    df_yf_GSPC = pd.read_json("yfinance_indizes/^GSPC.json", orient="index")
+    df_yf_XINO = pd.read_json("yfinance_indizes/XINO.FGI.json", orient="index")
 
-    df_all_index = df_all_index[
-    df_all_index["index_name"] == selected_index
-    ].reset_index(drop=True)
+
+    if selected_index == "DAX" :
+        df_yf = df_yf_DAX
+    
+    if selected_index == "S&P 500" :
+        df_yf = df_yf_GSPC
+
+    if selected_index == "FSTE China 50" :
+        df_yf = df_yf_XINO
+
+    df_yf.index = pd.to_datetime(df_yf.index)
+    
+    df_yf.columns = ["index_wert"]
+    df_yf.index.name = "zeit"
+    
+
+    df_all_index = df_yf.reset_index()
+
+
+
 
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
-    df_all_index["index_investpoint"] = df_all_index["index_growth"] <= -0.05
+    df_all_index["index_investpoint"] = df_all_index["index_growth"] <= -0.03 # noch zu ändernn!! 
        
 
     df_all_index["calculated_hebel"] = None
