@@ -4,7 +4,7 @@ def download_last_week(tickers=["^GDAXI", "^GSPC", "XIN0.FGI"]):
     for ticker in tickers:
         df = yf.download(
             ticker,
-            period="7d",
+            period="7d", #7Tage
             interval="1d",
             auto_adjust=True
         )
