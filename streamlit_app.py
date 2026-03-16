@@ -42,10 +42,6 @@ with bottom:
 with top:
     st.subheader(f"Kursverlauf - {selected_index}")
 
-with top:
-    st.subheader(f"Kursverlauf - {selected_index}")
-
-# Mapping von Auswahl-Namen zu Dateipfaden
     index_map = {
         "DAX": "yfinance_indizes/^GDAXI.json",
         "S&P 500": "yfinance_indizes/^GSPC.json",
@@ -79,83 +75,117 @@ with top:
     is_invested = False  
 
 
-    df_all_index["calculated_hebel"] = selected_hebel #gilt solange nicht investiert ist bzw. Startpunkt ist immer = selected_hebel
+    def start_investment(i):
+        global is_invested, remaining_budget, active_investment, index_investpoint_wert
+        is_invested = True
+        df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel)
+        df_all_index["calculated_hebel"] = selected_hebel
+        remaining_budget = remaining_budget * 0.8
+        active_investment = df_all_index.loc[i, "index_wert"]  
+        df_all_index.loc[i, "current_invest_wert"] = active_investment
+        index_investpoint_wert = df_all_index.loc[i, "index_wert"]
+
+    def knockout():
+        global is_invested, knockout_count, active_investment
+        active_investment = 0.0
+        df_all_index.loc[i, "current_invest_wert"] = 0.0
+        df_all_index.loc[i, "calculated_hebel"] = 0.0
+        active_investment = 0.0
+        is_invested = False
+        knockout_count += 1
+
+    def reset_investment():
+        global is_invested, active_investment
+        active_investment = 0.0
+        df_all_index.loc[i, "current_invest_wert"] = 0.0
+        df_all_index.loc[i, "calculated_hebel"] = 0.0
+        active_investment = 0.0
+        is_invested = False
+
+    def get_knockout_barrier(i):
+            prev_knockout_barrier = df_all_index.loc[i-1, "calculated_knockout_barrier"]
+            knockout_daily_increase = (prev_knockout_barrier * 0.05) / 360
+            return round(prev_knockout_barrier + knockout_daily_increase, 3)
+
+    def get_hebel(i):
+            abstand = df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]
+            if abstand > 0:
+                return df_all_index.loc[i, "index_wert"] / abstand
+            else:   
+                return 0
+            
+    def get_active_investment(i):
+            current_growth = 1 + (df_all_index.loc[i, "index_growth"] * df_all_index.loc[i, "calculated_hebel"])
+            return active_investment * current_growth
+
+    def get_rendite(i):
+            return round(active_investment - index_investpoint_wert, 3)
+
 
     for i in range (1, len(df_all_index)):
 
         if is_invested:
-            prev_knockout_barrier = df_all_index.loc[i-1, "calculated_knockout_barrier"]
-
-            
-            knockout_daily_increase = (prev_knockout_barrier * 5) / 36000
-            df_all_index.loc[i, "calculated_knockout_barrier"] = round(prev_knockout_barrier + knockout_daily_increase, 3)
-
+            df_all_index.loc[i, "calculated_knockout_barrier"] = get_knockout_barrier(i)
 
             if df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]:
-                df_all_index.loc[i, "current_invest_wert"] = 0.0
-                df_all_index.loc[i, "calculated_hebel"] = 0
-                active_investment = 0.0
-                is_invested = False
-                knockout_count += 1
+                knockout()
                 continue
 
-            abstand = df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]
-            if abstand > 0:
-                df_all_index.loc[i, "calculated_hebel"] = df_all_index.loc[i, "index_wert"] / abstand
-            else:   
-                df_all_index.loc[i, "calculated_hebel"] = 0
 
-            current_growth = 1 + (df_all_index.loc[i, "index_growth"] * df_all_index.loc[i, "calculated_hebel"])
-            active_investment = max(0.0, active_investment * current_growth)
+            df_all_index.loc[i, "calculated_hebel"] = get_hebel(i)
+            active_investment = get_active_investment(i)
+
+
+            if active_investment <= 0:
+                knockout()
+                continue
+
+
             df_all_index.loc[i, "current_invest_wert"] = active_investment
 
 
             if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
-                rendite = round(active_investment - index_investpoint_wert, 3)
-                is_invested = False
+                rendite = get_rendite(i)
+                reset_investment()
+                continue
 
-        if df_all_index.loc[i, "index_investpoint"] and not is_invested and remaining_budget > 0:
-            is_invested = True
-            df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel)
-            remaining_budget = remaining_budget * 0.8
-            active_investment = df_all_index.loc[i, "index_wert"]  
-            df_all_index.loc[i, "current_invest_wert"] = active_investment
-            index_investpoint_wert = df_all_index.loc[i, "index_wert"]
+
+        elif df_all_index.loc[i, "index_investpoint"] and not is_invested and remaining_budget > 0:
+            start_investment(i)
 
 
 
-    # df_all_index.to_csv("TestIndexRND_filtered.csv", index=False) #Speichern der CSV
     st.write(df_all_index)
 
 
     chart = alt.Chart(df_all_index)
 
-    line_index = chart.mark_line(color="#BA2BAC").encode(
-       x=alt.X(
-        "zeit:T",
-        title="Zeit",
-        axis=alt.Axis(
-            format="%d %b"
-            )
-        ),
-        y=alt.Y("index_wert:Q", title="Kurs")
+    base = alt.Chart(df_all_index).encode(
+        x=alt.X("zeit:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
 
-    line_knockout = chart.mark_line(color="#c4265e").encode(
-        x="zeit:T",
+    line_index = base.mark_line(color="#BA2BAC").encode(
+        y=alt.Y("index_wert:Q", title="Index Stand (Punkte)", scale=alt.Scale(zero=False))
+    )
+
+    line_knockout = base.mark_line(color="#c4265e").encode(
         y="calculated_knockout_barrier:Q"
     )
 
-    line_invest = chart.mark_line(color="#e2e22e").encode(
-        x="zeit:T",
-        y="current_invest_wert:Q"
+    line_invest = base.mark_line(color="#e2e22e", size=2).encode(
+        y=alt.Y("current_invest_wert:Q", 
+                title="Investment Wert (€)", 
+                axis=alt.Axis(orient="right"))
     )
 
-
-    st.altair_chart(
-        (line_index + line_knockout + line_invest),
-        use_container_width=True
+    combined_chart = alt.layer(
+        line_index + line_knockout, 
+        line_invest
+    ).resolve_scale(
+        y="independent"
     )
+
+    st.altair_chart(combined_chart, use_container_width=True)
 
 
 with mid:

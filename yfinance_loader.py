@@ -4,7 +4,7 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
     for ticker in tickers:
         df = yf.download(
             ticker,
-            period="1y", #7Tage intervall
+            period="5y",
             interval="1d",
             auto_adjust=True
         )
