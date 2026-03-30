@@ -1,15 +1,13 @@
-from numpy import floor
 import streamlit as st
 import pandas as pd
 import altair as alt
+import custom_funcs_investment as cfi
 
 st.title("KnockOut-Investition auf Indizes")
 
 top = st.container(border=True)
 mid = st.container(border=True)
 bottom = st.container(border=True)
-
-
 
 
 with bottom:
@@ -72,133 +70,52 @@ with top:
 
     df_all_index['current_invest_wert'] = None
 
-    knockout_count = 0
-
-    sells_count = 0
-    trades_count = 0
-
-    rendite = 0.0
-    index_investpoint_wert = 0.0
-    active_investment = 0.0
-
-    is_invested = False  
-
-    first_investment_date = df_all_index["zeit"].iloc[0]
-    last_investment_date = df_all_index["zeit"].iloc[0]
-
-    fault_not_enough_budget = False
-
-    bezugsverhältnis = 0.01
-
-
-    def start_investment(i):
-        global is_invested, remaining_budget, selected_budget, active_investment, index_investpoint_wert, bezugsverhältnis, fault_not_enough_budget, trades_count
-        
-        df_all_index.loc[i, "calculated_knockout_barrier"] = df_all_index.loc[i, "index_wert"] * (1 - 1 / selected_hebel)
-        
-
-        abstand = df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]
-        price_of_option = abstand * bezugsverhältnis
-
-        max_accessible_budget = selected_budget * 0.2 # 20% von ausgesuchtem Budget (von 1000€ -> 200€)
-        actual_invested_budget = min(max_accessible_budget, remaining_budget) #(200€, 200 - possible_amount_of_options * price_of_option)
-
-        if actual_invested_budget < price_of_option:
-            fault_not_enough_budget = True
-            return
-
-
-        df_all_index.loc[i, "calculated_hebel"] = selected_hebel
-
-        is_invested = True
-        trades_count += 1
-
-
-        df_all_index.loc[i, "actual_invested_budget"] = actual_invested_budget
-
-
-        df_all_index.loc[i, "price_of_option"] = price_of_option
-
-        possible_amout_of_options = floor(actual_invested_budget / price_of_option)
-
-        df_all_index.loc[i, "possible_amount_of_options"] = possible_amout_of_options
-        
-        active_investment = possible_amout_of_options * price_of_option
-        remaining_budget = remaining_budget - active_investment
-
-        df_all_index.loc[i, "active_investment"] = active_investment
-        df_all_index.loc[i, "current_invest_wert"] = active_investment
-        index_investpoint_wert = active_investment
-
-    def knockout():
-        global is_invested, knockout_count, active_investment
-        active_investment = None
-        df_all_index.loc[i, "current_invest_wert"] = None
-        df_all_index.loc[i, "calculated_hebel"] = 0.0
-        df_all_index.loc[i, "calculated_knockout_barrier"] = None
-        is_invested = False
-        knockout_count += 1
-
-    def reset_investment():
-        global is_invested, active_investment, sells_count
-        active_investment = None
-        df_all_index.loc[i, "current_invest_wert"] = None
-        df_all_index.loc[i, "calculated_hebel"] = 0.0
-        df_all_index.loc[i, "calculated_knockout_barrier"] = None
-        is_invested = False
-        sells_count += 1
-
-    def get_knockout_barrier(i):
-            prev_knockout_barrier = df_all_index.loc[i-1, "calculated_knockout_barrier"]
-            knockout_daily_increase = (prev_knockout_barrier * 0.05) / 360
-            return round(prev_knockout_barrier + knockout_daily_increase, 3)
-
-    def get_hebel(i):
-            abstand = df_all_index.loc[i, "index_wert"] - df_all_index.loc[i, "calculated_knockout_barrier"]
-            if abstand > 0:
-                return df_all_index.loc[i, "index_wert"] / abstand
-            else:   
-                return 0
-            
-    def get_active_investment(i):
-            current_growth = 1 + (df_all_index.loc[i, "index_growth"] * df_all_index.loc[i, "calculated_hebel"])
-            return active_investment * current_growth
-
-    def get_rendite(i):
-            return round(active_investment - index_investpoint_wert, 3)
+    state = {
+        "knockout_count": 0,
+        "sells_count": 0,
+        "trades_count": 0,
+        "rendite": 0.0,
+        "index_investpoint_wert": 0.0,
+        "active_investment": 0.0,
+        "is_invested": False,
+        "first_investment_date": df_all_index["zeit"].iloc[0],
+        "last_investment_date": df_all_index["zeit"].iloc[0],
+        "fault_not_enough_budget": False,
+        "bezugsverhältnis": 0.01
+    }
 
 
     for i in range (1, len(df_all_index)):
 
         df_all_index.loc[i,"index_investpoint"] = df_all_index.loc[i, "index_growth"] + df_all_index.loc[i-1, "index_growth"] <= -0.05
 
-        if is_invested and not fault_not_enough_budget:
-            df_all_index.loc[i, "calculated_knockout_barrier"] = get_knockout_barrier(i)
+        if state["is_invested"] and not state["fault_not_enough_budget"]:
+            df_all_index.loc[i, "calculated_knockout_barrier"] = cfi.get_knockout_barrier(df_all_index, i)
 
-            if  get_hebel(i) == 0: #df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]
-                knockout()
+            if  cfi.get_hebel(df_all_index, i) == 0: #df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]
+                cfi.knockout(df_all_index, state,i)
                 continue
 
-            df_all_index.loc[i, "calculated_hebel"] = get_hebel(i)
-            active_investment = get_active_investment(i)
+            df_all_index.loc[i, "calculated_hebel"] = cfi.get_hebel(df_all_index, i)
+            state["active_investment"] = cfi.get_active_investment(df_all_index, i, state)
 
-            if active_investment <= 0:
-                knockout()
-                last_investment_date = df_all_index.loc[i, "zeit"]
+            if state["active_investment"] <= 0:
+                cfi.knockout(df_all_index, state, i)
+                state["last_investment_date"] = df_all_index.loc[i, "zeit"]
                 continue
 
-            df_all_index.loc[i, "current_invest_wert"] = active_investment
+            df_all_index.loc[i, "current_invest_wert"] = state["active_investment"]
 
             if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
-                rendite += get_rendite(i)
-                reset_investment()
-                last_investment_date = df_all_index.loc[i, "zeit"]
+                state["rendite"] += cfi.get_rendite(state)
+                cfi.reset_investment(df_all_index, state, i)
+                state["last_investment_date"] = df_all_index.loc[i, "zeit"]
                 continue
 
-            last_investment_date = df_all_index.loc[i, "zeit"]
+            state["last_investment_date"] = df_all_index.loc[i, "zeit"]
 
-        elif df_all_index.loc[i, "index_investpoint"] and not is_invested and not fault_not_enough_budget:
-            start_investment(i)        
+        elif df_all_index.loc[i, "index_investpoint"] and not state["is_invested"] and not state["fault_not_enough_budget"]:
+            cfi.start_investment(df_all_index, state, i, selected_hebel, selected_budget, remaining_budget)
 
     first_investment_date = df_all_index.loc[df_all_index['index_investpoint'] == True, 'zeit'].iloc[0] #erste Investition (Datum)
 
@@ -228,7 +145,7 @@ with top:
         view_end = df_all_index["zeit"].iloc[-1]
     elif selecte_timeframe == "Aktive Investments":
         view_start = first_investment_date
-        view_end = last_investment_date
+        view_end = state["last_investment_date"]
     else:
         view_start = df_all_index["zeit"].iloc[0]
         view_end = df_all_index["zeit"].iloc[-1]
@@ -272,14 +189,14 @@ with mid:
             current_knockout = 0.0
         st.metric("KnockOut", current_knockout, "Test" )
 
-        st.metric("Knockouts", knockout_count, "Test")
+        st.metric("Knockouts", state["knockout_count"], "Test")
 
         st.metric("Interval", view_start.strftime("%d %b %Y") + "-" + view_end.strftime("%d %b %Y"), "Test")
 
     with col3:
-        st.metric("Rendite", rendite, "Test")
+        st.metric("Rendite", state["rendite"], "Test")
 
-        st.metric("Sells", sells_count, "Test")
+        st.metric("Sells", state["sells_count"], "Test")
 
-        st.metric("Trades", trades_count, "Test")
+        st.metric("Trades", state["trades_count"], "Test")
         
