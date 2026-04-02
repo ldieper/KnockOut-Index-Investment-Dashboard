@@ -14,6 +14,13 @@ def start_investment(df_all_index, state, i, selected_hebel, selected_budget, re
         if actual_invested_budget < price_of_option:
             state["fault_not_enough_budget"] = True
             return
+        
+
+
+
+        #klasse Investment
+        # bie investpoint: Neue investment klasse
+        # dann nur loop über klasse(a-z).investwert.cumsum etc.
 
 
         df_all_index.loc[i, "calculated_hebel"] = selected_hebel
