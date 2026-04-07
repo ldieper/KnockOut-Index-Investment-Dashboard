@@ -1,4 +1,6 @@
+from pathlib import Path
 import yfinance as yf
+
 
 def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
     for ticker in tickers:
@@ -8,6 +10,11 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
             interval="1d",
             auto_adjust=True
         )
+
+        from pathlib import Path
+
+        # Erstellt den Ordner, falls er nicht existiert
+        Path("yfinance_indizes").mkdir(parents=True, exist_ok=True)
 
         df.index = df.index.strftime('%Y-%m-%d')
         df = df[["Close"]]

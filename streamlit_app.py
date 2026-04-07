@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import custom_funcs_investment as cfi
 from investment import investment
+
+st.set_page_config(layout="wide")
 
 st.title("KnockOut-Investition auf Indizes")
 
@@ -73,6 +74,7 @@ with top:
     df_all_index["calculated_hebel"] = None
     df_all_index["calculated_knockout_barrier"] = None
 
+    df_all_index["index_investpoint"] = None
     df_all_index['current_invest_wert'] = None
 
     state = {
@@ -89,48 +91,71 @@ with top:
         "bezugsverhältnis": 0.01,
     }
 
+    investments = []
+    investment_count = 0
+
+    
+
+    for inv in investments:
+        print(f"Investment {inv.id}")
+
 
     for i in range (1, len(df_all_index)):
 
-        if (df_all_index.loc[i, "zeit"] > df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1)) : #Erst, wenn Index 1 Jahr existiert kann investiert werden
-            df_all_index.loc[i,"index_investpoint"] = df_all_index.loc[i, "index_wert"] < df_all_index.loc[i, "yearly_high"] * 0.9 #Investpoint (marker), wenn Indexwert 10% unter 52-Wochen Hoch fällt
+        #Erst, wenn Index 1 Jahr existiert kann investiert werden
+        if (df_all_index.loc[i, "zeit"] > df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1)) : 
+            #Investpoint (marker), wenn Indexwert 10% unter 52-Wochen Hoch fällt
+            df_all_index.loc[i,"index_investpoint"] = df_all_index.loc[i, "index_wert"] < df_all_index.loc[i, "yearly_high"] * 0.9 
+        
         else: 
-            df_all_index.loc[i, "index_investpoint"] = 0.0 #Im ersten Jahr kann kein Investpoint gesetzt werden
+            #Im ersten Jahr kann kein Investpoint gesetzt werden
+            df_all_index.loc[i, "index_investpoint"] = 0.0 
 
             #immer bei weiteren -10% neu investieren    
             #pasue von 2 Monaten
 
 
-        if state["is_invested"] and not state["fault_not_enough_budget"]:
-            df_all_index.loc[i, "calculated_knockout_barrier"] = cfi.get_knockout_barrier(df_all_index, i)
+        if state["is_invested"]:
 
-            if  cfi.get_hebel(df_all_index, i) == 0: #df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]
-                cfi.knockout(df_all_index, state,i)
+            df_all_index.loc[i, "calculated_knockout_barrier"] = new_inv.get_knockout_barrier()
+
+            if  new_inv.get_hebel() == 0: #df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]
+                new_inv.reset_investment("knockout")
                 continue
 
-            df_all_index.loc[i, "calculated_hebel"] = cfi.get_hebel(df_all_index, i)
-            state["active_investment"] = cfi.get_active_investment(df_all_index, i, state)
+            df_all_index.loc[i, "calculated_hebel"] = new_inv.get_hebel()
+            state["active_investment"] = new_inv.get_active_investment()
 
             if state["active_investment"] <= 0:
-                cfi.knockout(df_all_index, state, i)
+                new_inv.reset_investment("knockout")
                 state["last_investment_date"] = df_all_index.loc[i, "zeit"]
                 continue
 
             df_all_index.loc[i, "current_invest_wert"] = state["active_investment"]
 
             if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
-                state["rendite"] += cfi.get_rendite(state)
-                cfi.reset_investment(df_all_index, state, i)
+                state["rendite"] += new_inv.get_rendite()
+                new_inv.reset_investment("sell")
                 state["last_investment_date"] = df_all_index.loc[i, "zeit"]
                 continue
 
             state["last_investment_date"] = df_all_index.loc[i, "zeit"]
 
         elif df_all_index.loc[i, "index_investpoint"] and not state["is_invested"] and not state["fault_not_enough_budget"]:
-            #cfi.start_investment(df_all_index, state, i, selected_hebel, selected_budget, remaining_budget)
 
-            inv = investment(df_all_index, state, i, selected_hebel, selected_budget, remaining_budget)
-            inv.start_investment()
+            investment_count += 1
+            new_inv = investment(source=df_all_index,
+                         state=state, i=0,
+                         selected_hebel=selected_hebel,
+                         selected_budget=selected_budget,
+                         remaining_budget=remaining_budget,
+                         inv_id=investment_count)
+            investments.append(new_inv)
+            new_inv.start_investment()
+
+
+
+
 
     first_investment_date = df_all_index.loc[df_all_index['index_investpoint'] == True, 'zeit'].iloc[0] #erste Investition (Datum)
 
