@@ -66,9 +66,11 @@ with top:
 
 
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
-
     df_all_index = df_all_index.set_index("zeit")
-    df_all_index["yearly_high"] = df_all_index["index_wert"].rolling("364D", min_periods=1).max() #im Zeitfenster (rolling) der letzten 52-Wochen
+
+
+    
+    
     df_all_index = df_all_index.reset_index()
 
     df_all_index["calculated_hebel"] = None
@@ -77,135 +79,120 @@ with top:
     df_all_index["index_investpoint"] = None
     df_all_index['current_invest_wert'] = None
 
-    state = {
-        "knockout_count": 0,
-        "sells_count": 0,
-        "trades_count": 0,
-        "rendite": 0.0,
-        "index_investpoint_wert": 0.0,
-        "active_investment": 0.0,
-        "is_invested": False,
-        "first_investment_date": df_all_index["zeit"].iloc[0],
-        "last_investment_date": df_all_index["zeit"].iloc[0],
-        "fault_not_enough_budget": False,
-        "bezugsverhältnis": 0.01,
-    }
 
-    investments = []
-    investment_count = 0
+
+
+    
+    df_all_index["yearly_high"] = (
+        df_all_index["index_wert"]
+            .rolling(window=252, min_periods=1)  # ~trading days in a year
+            .max()
+    )#im Zeitfenster (rolling) der letzten 52-Wochen
+
+
+
+
 
     
 
-    for inv in investments:
-        print(f"Investment {inv.id}")
+
+    start_date = df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1) #1jahr nach anfang von Index
+    mask = df_all_index["zeit"] > start_date #mask = für Investments relevanter bereich
 
 
-    for i in range (1, len(df_all_index)):
+    investment_break = 20 #Pause bis zum nächsten Investment, Ausnahme: 20% Drop
 
-        #Erst, wenn Index 1 Jahr existiert kann investiert werden
-        if (df_all_index.loc[i, "zeit"] > df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1)) : 
-            #Investpoint (marker), wenn Indexwert 10% unter 52-Wochen Hoch fällt
-            df_all_index.loc[i,"index_investpoint"] = df_all_index.loc[i, "index_wert"] < df_all_index.loc[i, "yearly_high"] * 0.9 
-        
-        else: 
-            #Im ersten Jahr kann kein Investpoint gesetzt werden
-            df_all_index.loc[i, "index_investpoint"] = 0.0 
+    for i in df_all_index[mask].index: #Bereich, der für Investments relevant ist
+        price = df_all_index.loc[i, "index_wert"]
+        high = df_all_index.loc[i, "yearly_high"]
 
-            #immer bei weiteren -10% neu investieren    
-            #pasue von 2 Monaten
+        if price < high * 0.9:
+            if not df_all_index["index_investpoint"].iloc[max(0, i-investment_break):i].any():  # Kein Investment im letzten Monat (20 Handelstage)
+                df_all_index.loc[i, "index_investpoint"] = True
 
+        if price < high * 0.8:
+             if df_all_index["index_investpoint"].iloc[max(0, i-investment_break):i].sum() < 2 and 0 < df_all_index["index_investpoint"].iloc[max(0, i-investment_break):i].sum():  # Investment im letzten Monat (20 Handelstage)
+                df_all_index.loc[i, "index_investpoint"] = True
+    
+    rows = [] #Zum unterscheiden der Reihen, der Investments
+    investments = [] #Liste der Klassen von Investment
+    investment_count = 0 #Zählt die Anzahl an Investment und wird für die Vergabe der inv.id verwendet
 
-        if state["is_invested"]:
+    for i in df_all_index[mask].index:
 
-            df_all_index.loc[i, "calculated_knockout_barrier"] = new_inv.get_knockout_barrier()
-
-            if  new_inv.get_hebel() == 0: #df_all_index.loc[i, "index_wert"] <= df_all_index.loc[i, "calculated_knockout_barrier"]
-                new_inv.reset_investment("knockout")
-                continue
-
-            df_all_index.loc[i, "calculated_hebel"] = new_inv.get_hebel()
-            state["active_investment"] = new_inv.get_active_investment()
-
-            if state["active_investment"] <= 0:
-                new_inv.reset_investment("knockout")
-                state["last_investment_date"] = df_all_index.loc[i, "zeit"]
-                continue
-
-            df_all_index.loc[i, "current_invest_wert"] = state["active_investment"]
-
-            if df_all_index.loc[i, "calculated_hebel"] <= 1.5:
-                state["rendite"] += new_inv.get_rendite()
-                new_inv.reset_investment("sell")
-                state["last_investment_date"] = df_all_index.loc[i, "zeit"]
-                continue
-
-            state["last_investment_date"] = df_all_index.loc[i, "zeit"]
-
-        elif df_all_index.loc[i, "index_investpoint"] and not state["is_invested"] and not state["fault_not_enough_budget"]:
-
+        if df_all_index.loc[i, "index_investpoint"]:
+            
             investment_count += 1
-            new_inv = investment(source=df_all_index,
-                         state=state, i=0,
+            new_inv = investment(source=df_all_index, #Erstellen eines neuen Investments
+                         i=i,
                          selected_hebel=selected_hebel,
                          selected_budget=selected_budget,
                          remaining_budget=remaining_budget,
-                         inv_id=investment_count)
-            investments.append(new_inv)
-            new_inv.start_investment()
+                         inv_id=investment_count) #ID des Investments == Invest_counter
+            investments.append(new_inv) #Hinzufügen zu investments Liste
+            new_inv.start_investment() #Starten des Investments
+            new_inv.active = True #Aktiviert das Investment
+
+        for inv in investments:
+
+            if not inv.active: #Falls das Investment bereits inactiv ist zu diesem Zeitpunkt
+                continue
+
+            #Übertragen und Berechnen aller Werte
+            current_price = df_all_index.loc[i, "index_wert"]
+            inv.current_value = current_price  # example logic
+
+
+            # speichern der Werte in zuordbaren Reihen
+            rows.append({
+                "date": df_all_index.loc[i, "date"],
+                "inv_id": inv.id,
+                "start_index": inv.i,
+                "current_index": i,
+                "knockout_barrier": inv.current_knockout_barrier,
+                "current_value": inv.current_value
+            })
 
 
 
+    #trades_count = len(investment) #Anzahl an trades
+    #active_trades  = sum(1 for inv in investment if inv.active)
+    #closed_trades = sum(1 for inv in investment if not inv.active)
+    #sells_count = sum(1 for inv in investment if inv.closing_reason) #True = Sell
+    #knockouts_count = sum(1 for inv in investment if not inv.closing_reason) #False = Knockout
 
 
-    first_investment_date = df_all_index.loc[df_all_index['index_investpoint'] == True, 'zeit'].iloc[0] #erste Investition (Datum)
-
-    #barrier_series = df_all_index.loc[df_all_index['calculated_knockout_barrier'] == True, 'zeit'] #vorgefiltert für letzten Tradepunkt (Iloc gibt sonst Fehler aus)
-    #last_investment_point = next(iter(barrier_series.tail(1)), df_all_index['zeit'].iloc[-1]) #,wenn Empty = LastDate, sonst letzter Tradepunkt
-
-    base = alt.Chart(df_all_index).encode(
+base = alt.Chart(df_all_index).encode(
         x=alt.X("zeit:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
 
-    line_index = base.mark_line(color="#BA2BAC").encode(
+line_index = base.mark_line(color="#BA2BAC").encode(
         y=alt.Y("index_wert:Q", title="Index Stand (Punkte)", scale=alt.Scale(zero=False))
     )
 
-    line_knockout = base.mark_line(color="#c4265e").encode(
+line_knockout = base.mark_line(color="#c4265e").encode(
         y="calculated_knockout_barrier:Q"
     )
 
-    line_invest = base.mark_line(color="#e2e22e", size=2).encode(
+line_invest = base.mark_line(color="#e2e22e", size=2).encode(
         y=alt.Y("current_invest_wert:Q", 
                 title="Investment Wert (€)", 
                 axis=alt.Axis(orient="right"))
     )
 
-    if selecte_timeframe == "5 Jahre":
-        view_start = df_all_index["zeit"].iloc[-1] - pd.DateOffset(years=5)
-        view_end = df_all_index["zeit"].iloc[-1]
-    elif selecte_timeframe == "Aktive Investments":
-        view_start = first_investment_date
-        view_end = state["last_investment_date"]
-    else:
-        view_start = df_all_index["zeit"].iloc[0]
-        view_end = df_all_index["zeit"].iloc[-1]
 
-    x_parallax = alt.selection_interval(bind='scales', encodings=['x'])
+x_parallax = alt.selection_interval(bind='scales', encodings=['x'])
 
-    combined_chart = alt.layer(
+combined_chart = alt.layer(
         line_index + line_knockout, 
         line_invest
     ).resolve_scale(
         y="independent" 
-    ).encode(
-         x=alt.X('x:T', 
-                scale=alt.Scale(domain=[view_start, view_end]), #mögliche Beschränkung des x-Achsen Bereichs
-        )
     ).add_params(
         x_parallax  
     )
 
-    st.altair_chart(combined_chart, use_container_width=True)
+st.altair_chart(combined_chart, use_container_width=True)
 
 
 with mid:
@@ -231,12 +218,10 @@ with mid:
 
         st.metric("Knockouts", state["knockout_count"], "Test")
 
-        st.metric("Interval", view_start.strftime("%d %b %Y") + "-" + view_end.strftime("%d %b %Y"), "Test")
-
     with col3:
         st.metric("Rendite", state["rendite"], "Test")
 
-        st.metric("Sells", state["sells_count"], "Test")
+        #st.metric("Sells", sells_count, "Test")
 
-        st.metric("Trades", state["trades_count"], "Test")
+        #st.metric("Trades", trades_count, "Test")
         
