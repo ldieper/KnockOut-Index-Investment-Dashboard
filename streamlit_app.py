@@ -68,8 +68,6 @@ with top:
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
     df_all_index = df_all_index.set_index("zeit")
 
-
-    
     
     df_all_index = df_all_index.reset_index()
 
@@ -81,20 +79,11 @@ with top:
 
 
 
-
-    
     df_all_index["yearly_high"] = (
         df_all_index["index_wert"]
             .rolling(window=252, min_periods=1)  # ~trading days in a year
             .max()
     )#im Zeitfenster (rolling) der letzten 52-Wochen
-
-
-
-
-
-    
-
 
     start_date = df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1) #1jahr nach anfang von Index
     mask = df_all_index["zeit"] > start_date #mask = für Investments relevanter bereich
@@ -130,28 +119,42 @@ with top:
                          remaining_budget=remaining_budget,
                          inv_id=investment_count) #ID des Investments == Invest_counter
             investments.append(new_inv) #Hinzufügen zu investments Liste
-            new_inv.start_investment() #Starten des Investments
             new_inv.active = True #Aktiviert das Investment
+
+            remaining_budget -= new_inv.active_investment #Abziehen des Investments vom Budget
 
         for inv in investments:
 
-            if not inv.active: #Falls das Investment bereits inactiv ist zu diesem Zeitpunkt
+            if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
                 continue
-
-            #Übertragen und Berechnen aller Werte
-            current_price = df_all_index.loc[i, "index_wert"]
-            inv.current_value = current_price  # example logic
-
 
             # speichern der Werte in zuordbaren Reihen
             rows.append({
-                "date": df_all_index.loc[i, "date"],
+                "date": df_all_index.loc[i, "zeit"],
                 "inv_id": inv.id,
-                "start_index": inv.i,
-                "current_index": i,
-                "knockout_barrier": inv.current_knockout_barrier,
-                "current_value": inv.current_value
+                "knockout_barrier": inv.get_current_knockout_barrier(i=i),
+                "current_value": inv.get_active_investment(i=i),
+                "hebel": inv.get_hebel(i=i),
+                "rendite": inv.get_rendite(i=i)
             })
+
+
+
+    df_rows = pd.DataFrame(rows) #Rows in ein Dataframe umwandeln
+
+    df_rows["cumsum_inv"] = ( #sum pro Investment
+    df_rows
+        .sort_values(["inv_id", "date"])
+        .groupby("inv_id")["current_value"]
+        .cumsum()
+    )
+
+    df_portfolio = ( #sum von allen Investments
+    df_rows
+        .groupby("date")["current_value"]
+        .sum()
+        .reset_index()
+    )
 
 
 
@@ -216,12 +219,11 @@ with mid:
             current_knockout = 0.0
         st.metric("KnockOut", current_knockout, "Test" )
 
-        st.metric("Knockouts", state["knockout_count"], "Test")
+        #st.metric("Knockouts", state["knockout_count"], "Test")
 
-    with col3:
-        st.metric("Rendite", state["rendite"], "Test")
+    #with col3:
+        #st.metric("Rendite", state["rendite"], "Test")
 
         #st.metric("Sells", sells_count, "Test")
 
         #st.metric("Trades", trades_count, "Test")
-        
