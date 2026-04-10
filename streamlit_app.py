@@ -128,6 +128,7 @@ with top:
             if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
                 continue
 
+
             # speichern der Werte in zuordbaren Reihen
             rows.append({
                 "date": df_all_index.loc[i, "zeit"],
@@ -137,6 +138,24 @@ with top:
                 "hebel": inv.get_hebel(i=i),
                 "rendite": inv.get_rendite(i=i)
             })
+
+            #Fall eines Knockouts, berechnet aus Hebel
+            if  inv.get_hebel(i=i) == 0:
+                inv.reset_investment(type="knockout")
+                continue
+
+            #Fall eines Knockouts, berechnet aus aktuellem Wert des Investments
+            if inv.get_active_investment(i=i) <= 0:
+                inv.reset_investment(type="knockout")
+                continue
+
+            #Fall eines regulären Verkaufs, weil der Hebel unter 1.5x gefallen ist
+            if inv.get_hebel(i=i) <= 1.5:
+                inv.reset_investment(type="sell")
+                continue
+
+
+
 
 
 
