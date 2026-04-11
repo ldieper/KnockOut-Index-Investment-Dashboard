@@ -73,10 +73,12 @@ class investment:
                 
 
     def get_active_investment(self, i):
+        current_growth = self.source.loc[self.i, "index_growth"] #Startwert des Investments
+
         if i > self.i: #für i == self.i ist bei start_investment der Wert bereits gesetzt
             current_growth = 1 + self.source.loc[i, "index_growth"] * self.get_hebel(i=i)
-            self.active_investment *= current_growth
-        return self.active_investment
+        return self.active_investment * current_growth
+    
     
 
     def get_rendite(self, i):
