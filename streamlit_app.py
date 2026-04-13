@@ -39,7 +39,7 @@ with bottom:
     with col3:
         selected_budget = st.radio(
             "Budget",
-            ["500", "1000"]     
+            ["5000", "10000"]     
         )
         selected_budget = float(selected_budget)
         remaining_budget = selected_budget
@@ -60,13 +60,13 @@ with top:
     df_yf.index = pd.to_datetime(df_yf.index)
     
     df_yf.columns = ["index_wert"]
-    df_yf.index.name = "zeit"
+    df_yf.index.name = "date"
 
     df_all_index = df_yf.reset_index()
 
 
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
-    df_all_index = df_all_index.set_index("zeit")
+    df_all_index = df_all_index.set_index("date")
 
     
     df_all_index = df_all_index.reset_index()
@@ -85,8 +85,8 @@ with top:
             .max()
     )#im Zeitfenster (rolling) der letzten 52-Wochen
 
-    start_date = df_all_index["zeit"].iloc[0] + pd.DateOffset(years=1) #1jahr nach anfang von Index
-    mask = df_all_index["zeit"] > start_date #mask = für Investments relevanter bereich
+    start_date = df_all_index["date"].iloc[0] + pd.DateOffset(years=1) #1jahr nach anfang von Index
+    mask = df_all_index["date"] > start_date #mask = für Investments relevanter bereich
 
 
     investment_break = 20 #Pause bis zum nächsten Investment, Ausnahme: 20% Drop
@@ -127,16 +127,8 @@ with top:
             if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
                 continue
 
-
-            # speichern der Werte in zuordbaren Reihen
-            rows.append({
-                "date": df_all_index.loc[i, "zeit"],
-                "inv_id": inv.id,
-                "knockout_barrier": inv.get_current_knockout_barrier(i=i),
-                "current_value": inv.get_active_investment(i=i),
-                "hebel": inv.get_hebel(i=i),
-                "rendite": inv.get_rendite(i=i)
-            })
+            inv.update_current_knockout_barrier(i) #Aktualisiert die Knockoutbarriere
+            inv.update_investment_value(i) #Aktualisiert den aktuellen Wert des Investments
 
             #Fall eines Knockouts, berechnet aus Hebel
             if  inv.get_hebel(i=i) == 0:
@@ -144,7 +136,7 @@ with top:
                 continue
 
             #Fall eines Knockouts, berechnet aus aktuellem Wert des Investments
-            if inv.get_active_investment(i=i) <= 0:
+            if inv.active_investment <= 0:
                 inv.reset_investment(type="knockout")
                 continue
 
@@ -152,6 +144,18 @@ with top:
             if inv.get_hebel(i=i) <= 1.5:
                 inv.reset_investment(type="sell")
                 continue
+
+            # speichern der Werte in zuordbaren Reihen
+            rows.append({
+                "date": df_all_index.loc[i, "date"],
+                "inv_id": inv.id,
+                "knockout_barrier": inv.get_current_knockout_barrier(),
+                "current_value": inv.active_investment,
+                "hebel": inv.get_hebel(i=i),
+                "rendite": inv.get_rendite(i=i)
+            })
+
+
 
 
 
@@ -164,79 +168,47 @@ with top:
     #knockouts_count = sum(1 for inv in investment if not inv.closing_reason) #False = Knockout
 
 
+df_investment = pd.DataFrame(rows) #Dataframe aus den gesammelten Reihen der Investments
+df_all_index["date"] = pd.to_datetime(df_all_index["date"])
+df_investment["date"] = pd.to_datetime(df_investment["date"])
 
-    df_rows = pd.DataFrame(rows)
+df_plot = pd.merge(
+    df_all_index,
+    df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "rendite"]],
+    on="date",
+    how="left"
+)
 
-    # Define investment plot
-    investment_plot = alt.Chart(df_rows).mark_line().encode(
-        x=alt.X("date:T", title="Datum"),
-        y=alt.Y("current_value:Q", title="Investment Wert (€)"),
-        color=alt.Color("inv_id:N", title="Investment ID")
+base = alt.Chart(df_plot).encode(
+    x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
+)
+
+
+left_axis_group = alt.layer(
+    base.mark_line(color="#BA2BAC").encode(
+        y=alt.Y("index_wert:Q", title="Index & Barrier Level")
+    ),
+    base.mark_line(color="#c4265e", strokeDash=[4, 2]).encode(
+        y="knockout_barrier:Q",
+        detail="inv_id:N" 
     )
+)
 
-    # Define index plot with knockout barrier and investment value
-    base = alt.Chart(df_all_index).encode(
-        x=alt.X("zeit:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
-    )
-
-    line_index = base.mark_line(color="#BA2BAC").encode(
-        y=alt.Y("index_wert:Q", title="Index Stand (Punkte)", scale=alt.Scale(zero=False))
-    )
-
-    line_knockout = base.mark_line(color="#c4265e").encode(
-        y="calculated_knockout_barrier:Q"
-    )
-
-    line_invest = base.mark_line(color="#e2e22e", size=2).encode(
-        y=alt.Y("current_invest_wert:Q", title="Investment Wert (€)", axis=alt.Axis(orient="right"))
-    )
-
-    # Combine the plots
-    combined_chart = alt.layer(
-        line_index, 
-        line_knockout, 
-        line_invest, 
-        investment_plot  # Adding the investment plot to the layer
-    ).resolve_scale(
-        y="independent"  # Independent scales for y-axis
-    )
-
-    # Display the combined chart
-    st.altair_chart(combined_chart, use_container_width=True)
-
-"""
-base = alt.Chart(df_all_index).encode(
-        x=alt.X("zeit:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
-    )
-
-line_index = base.mark_line(color="#BA2BAC").encode(
-        y=alt.Y("index_wert:Q", title="Index Stand (Punkte)", scale=alt.Scale(zero=False))
-    )
-
-line_knockout = base.mark_line(color="#c4265e").encode(
-        y="calculated_knockout_barrier:Q"
-    )
-
-line_invest = base.mark_line(color="#e2e22e", size=2).encode(
-        y=alt.Y("current_invest_wert:Q", 
-                title="Investment Wert (€)", 
-                axis=alt.Axis(orient="right"))
-    )
-
-
-x_parallax = alt.selection_interval(bind='scales', encodings=['x'])
+right_axis_group = alt.Chart(df_investment).mark_line(color="#e2e22e", size=2).encode(
+    x="date:T",
+    y=alt.Y("current_value:Q", title="Investment Value (€)"),
+    color="inv_id:N"
+)
 
 combined_chart = alt.layer(
-        line_index + line_knockout, 
-        line_invest
-    ).resolve_scale(
-        y="independent" 
-    ).add_params(
-        x_parallax  
-    )
+    left_axis_group,
+    right_axis_group
+).resolve_scale(
+    y="independent"
+)
 
-st.altair_chart(combined_chart, use_container_width=True)
-"""
+st.altair_chart(combined_chart, use_container_width=True)           
+
 
 with mid:
 
