@@ -13,14 +13,17 @@ class investment:
             self.active = False
             self.closing_reason = None #False = Knockout, True = Sell
             self.starting_investment = 0.0
-            self.active_investment = 0.0
+            self.investment_value = 0.0
             self.price_of_option = 0.0
             self.possible_amount_of_options = 0
+            self.hebel = 0.0
+            self.current_knockout_barrier = 0.0
 
 
         def start_investment(self):
 
             self.update_current_knockout_barrier(i=self.i) #setzt die Knockoutbarriere zum Startzeitpunkt
+            self.update_hebel(i=self.i) #setzt den Hebel zum Startzeitpunkt
 
             abstand = self.source.loc[self.i, "index_wert"] - self.get_current_knockout_barrier()
             price_of_option = abstand * 0.01 #Bezugsverhältnis
@@ -34,14 +37,14 @@ class investment:
             self.active = True #setzt die Investition a   ls aktiv 
 
             possible_amount_of_options = floor(actual_invested_budget / price_of_option)
-            self.active_investment = possible_amount_of_options * price_of_option
-            self.starting_investment = self.active_investment #Für die späteren Renditeberechnung
+            self.investment_value = possible_amount_of_options * price_of_option
+            self.starting_investment = self.investment_value #Für die späteren Renditeberechnung
 
 
 
         def reset_investment(self, type):
             self.active = False
-            self.active_investment = None
+            self.investment_value = None
             self.current_knockout_barrier = None
 
             if type == "sell":
@@ -64,33 +67,34 @@ class investment:
                 self.current_knockout_barrier += knockout_daily_increase
 
 
-        def get_hebel(self, i):
-
+        def get_hebel(self):
+            return min(self.hebel, 100)
+        
+        def update_hebel(self, i):
             if i == self.i:
-                return self.selected_hebel
+                self.hebel = self.selected_hebel
             
             if i > self.i:
                 abstand = self.source.loc[i, "index_wert"] - self.get_current_knockout_barrier()
                 hebel = self.source.loc[i, "index_wert"] / abstand if abstand > 0 else 0
-                return min(hebel, 100)  # Cap bei Hebel von 100, um unrealistische Werte zu vermeiden
-            
-            return 0
+                self.hebel = min(hebel, 100)  # Cap bei Hebel von 100, um unrealistische Werte zu vermeiden
         
         
+
+        def get_investment_value(self):
+            return self.investment_value
+
         def update_investment_value(self, i):
             if i == self.i:
-                return self.active_investment
+                self.investment_value = self.starting_investment
 
-            hebel = self.get_hebel(i)
-            if hebel == 0:
-                self.active_investment = 0
-                return 0
+            if self.get_hebel() == 0:
+                self.investment_value = 0
+                return
 
-            growth = 1 + self.source.loc[i, "index_growth"] * hebel
-            self.active_investment *= growth
-
-            return self.active_investment
+            growth = 1 + self.source.loc[i, "index_growth"] * self.get_hebel()
+            self.investment_value *= growth
         
         
-        def get_rendite(self, i):
-            return round(self.active_investment - self.starting_investment, 3)
+        def get_rendite(self):
+            return round(self.get_investment_value() - self.starting_investment, 3)

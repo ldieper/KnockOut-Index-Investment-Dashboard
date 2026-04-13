@@ -16,17 +16,12 @@ with bottom:
     
     st.subheader("Aktuelle Regler")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 , col4 = st.columns(4)
 
     with col1:
         selected_index = st.radio(
             "Index",
             ["DAX", "S&P 500", "FSTE China 50"]
-        )
-
-        selecte_timeframe = st.radio(
-            "Timeframe",
-            ["Seit Beginn", "5 Jahre", "Aktive Investments"]
         )
 
     with col2:  
@@ -43,6 +38,13 @@ with bottom:
         )
         selected_budget = float(selected_budget)
         remaining_budget = selected_budget
+
+
+    with col4:  
+        investment_break = st.slider("Wähle die Anzahl der Tage, die zwischen zwei Investments liegen soll",
+                        min_value=5,
+                        max_value=252,)
+        investment_break = int(investment_break)
         
 
 with top:
@@ -89,8 +91,6 @@ with top:
     mask = df_all_index["date"] > start_date #mask = für Investments relevanter bereich
 
 
-    investment_break = 20 #Pause bis zum nächsten Investment, Ausnahme: 20% Drop
-
     for i in df_all_index[mask].index: #Bereich, der für Investments relevant ist
         price = df_all_index.loc[i, "index_wert"]
         high = df_all_index.loc[i, "yearly_high"]
@@ -120,28 +120,29 @@ with top:
                          inv_id=investment_count) #ID des Investments == Invest_counter
             investments.append(new_inv) #Hinzufügen zu investments Liste
             new_inv.start_investment() #Startet das Investment
-            remaining_budget -= new_inv.active_investment #Abziehen des Investments vom Budget
+            remaining_budget -= new_inv.get_investment_value() #Abziehen des Investments vom Budget
 
         for inv in investments:
 
             if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
                 continue
 
-            inv.update_current_knockout_barrier(i) #Aktualisiert die Knockoutbarriere
-            inv.update_investment_value(i) #Aktualisiert den aktuellen Wert des Investments
+            inv.update_current_knockout_barrier(i=i) #Aktualisiert die Knockoutbarriere
+            inv.update_investment_value(i=i) #Aktualisiert den aktuellen Wert des Investments
+            inv.update_hebel(i=i) #Aktualisiert den Hebel des Investments
 
             #Fall eines Knockouts, berechnet aus Hebel
-            if  inv.get_hebel(i=i) == 0:
+            if  inv.get_hebel() == 0:
                 inv.reset_investment(type="knockout")
                 continue
 
             #Fall eines Knockouts, berechnet aus aktuellem Wert des Investments
-            if inv.active_investment <= 0:
+            if inv.get_investment_value() <= 0:
                 inv.reset_investment(type="knockout")
                 continue
 
             #Fall eines regulären Verkaufs, weil der Hebel unter 1.5x gefallen ist
-            if inv.get_hebel(i=i) <= 1.5:
+            if inv.get_hebel() <= 1.5:
                 inv.reset_investment(type="sell")
                 continue
 
@@ -150,9 +151,9 @@ with top:
                 "date": df_all_index.loc[i, "date"],
                 "inv_id": inv.id,
                 "knockout_barrier": inv.get_current_knockout_barrier(),
-                "current_value": inv.active_investment,
-                "hebel": inv.get_hebel(i=i),
-                "rendite": inv.get_rendite(i=i)
+                "current_value": inv.get_investment_value(),
+                "hebel": inv.get_hebel(),
+                "rendite": inv.get_rendite()
             })
 
 
