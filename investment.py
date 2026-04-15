@@ -1,6 +1,6 @@
 from numpy import floor
 
-class investment:
+class Investment:
         def __init__(self, source, i, selected_hebel, selected_budget, remaining_budget, inv_id):
             self.source = source
             self.i = i
@@ -11,13 +11,14 @@ class investment:
 
             self.starting_date = self.source.loc[self.i, "date"]
             self.active = False
-            self.closing_reason = None #False = Knockout, True = Sell
+            self.closing_reason = None #0 = Knockout, 1 = Sell, 2 = Not_enough_money
             self.starting_investment = 0.0
             self.investment_value = 0.0
             self.price_of_option = 0.0
             self.possible_amount_of_options = 0
             self.hebel = 0.0
             self.current_knockout_barrier = 0.0
+            self.gewinn = 0.0
 
 
         def start_investment(self):
@@ -28,18 +29,18 @@ class investment:
             abstand = self.source.loc[self.i, "index_wert"] - self.get_current_knockout_barrier()
             price_of_option = abstand * 0.01 #Bezugsverhältnis
 
-            max_accessible_budget = self.selected_budget * 0.2
+            max_accessible_budget = self.selected_budget * 0.5
             actual_invested_budget = min(max_accessible_budget, self.remaining_budget)
 
             if actual_invested_budget < price_of_option:
+                self.reset_investment(type="not_enough_money") #Setzt die Investition als inaktiv, da nicht genug Geld für den Kauf einer Option vorhanden ist
                 return
             
-            self.active = True #setzt die Investition a   ls aktiv 
+            self.active = True #setzt die Investition als aktiv 
 
             possible_amount_of_options = floor(actual_invested_budget / price_of_option)
             self.investment_value = possible_amount_of_options * price_of_option
             self.starting_investment = self.investment_value #Für die späteren Renditeberechnung
-
 
 
         def reset_investment(self, type):
@@ -47,10 +48,12 @@ class investment:
             self.investment_value = None
             self.current_knockout_barrier = None
 
-            if type == "sell":
-                self.closing_reason = True
-            elif type == "knockout":
-                self.closing_reason = False
+            if type == "knockout":
+                self.closing_reason = 0
+            elif type == "sell": 
+                self.closing_reason = 1
+            elif type == "not_enough_money": 
+                self.closing_reason = 2
 
 
         def get_current_knockout_barrier(self):
@@ -96,5 +99,8 @@ class investment:
             self.investment_value *= growth
         
         
-        def get_rendite(self):
-            return round(self.get_investment_value() - self.starting_investment, 3)
+        def get_gewinn(self):
+            return self.gewinn
+        
+        def update_gewinn(self):
+            self.gewinn = round(self.get_investment_value() - self.starting_investment, 2)
