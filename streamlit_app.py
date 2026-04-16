@@ -67,24 +67,27 @@ def prepare_investment_data(df_all_index):
 # Kennzahlen berechnen (Funktion)
 def calculate_metrics(df_investment):
     final_trades = df_investment.groupby("inv_id").last()
-    valid_trades = final_trades[final_trades["closing_reason"] != 2]
 
-    discarded_count = (valid_trades["closing_reason"] == 2).sum()
-    closed_trades = (~valid_trades["active"]).sum()
-    sells_count = (valid_trades["closing_reason"] == 1).sum()
-    knockouts_count = (valid_trades["closing_reason"] == 0).sum()
-    not_enough_money_count = (valid_trades["closing_reason"] == 2).sum()
+    active_trades = final_trades["active"].sum()
+    print(final_trades)
 
-    final_gewinn = round(valid_trades["gewinn"].sum(), 2)
-    trades_count = (valid_trades["closing_reason"] != 2).sum()
-    active_trades = (valid_trades["active"] == True).sum()
-    loss_sum = round(valid_trades.loc[valid_trades["closing_reason"] == 0, "starting_investment"].sum(), 2)
-    total_invested_sum = round(valid_trades.loc[valid_trades["closing_reason"] != 2, "starting_investment"].sum(), 2)
+    closed_trades = (~final_trades["active"]).sum()
+    sells_count = (final_trades["closing_reason"] == 1).sum()
+    knockouts_count = (final_trades["closing_reason"] == 0).sum()
+
+    trades_count = (final_trades["closing_reason"] != 2).sum()
+    knockouts_count = (final_trades["closing_reason"] == 0).sum()
+    sells_count = (final_trades["closing_reason"] == 1).sum()
+    not_enough_money_count = (final_trades["closing_reason"] == 2).sum()
+    active_trades = final_trades["active"].sum()
+
+    final_gewinn = round(final_trades["gewinn"].sum(), 2)
+    loss_sum = round(final_trades.loc[final_trades["closing_reason"] == 0, "starting_investment"].sum(), 2)
+    total_invested_sum = round(final_trades.loc[final_trades["closing_reason"] != 2, "starting_investment"].sum(), 2)
 
     total_rendite = round(final_gewinn / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0
 
     return {
-        "discarded_count": discarded_count,
         "closed_trades": closed_trades,
         "sells_count": sells_count,
         "knockouts_count": knockouts_count,
@@ -132,7 +135,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
             # Kennzahlen berechnen
             metrics = calculate_metrics(df_investment)
 
-            # PPlotten
+            # Plotten
             df_plot = pd.merge(
                 df_all_index,
                 df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value"]],
@@ -221,6 +224,28 @@ with top:
 
 with bottom:
 
+    st.markdown("""
+    <style>
+
+    div[data-testid="stMetric"] {
+        padding: 12px;
+        /* border: 2px solid red; */
+        /* border-radius: 14px; */
+        /* box-shadow: 0 2px 10px rgba(0,0,0,0.08); */
+        transition: all 0.2s ease;
+    }
+
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-4px) scale(1.02);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    </style>
+    """, unsafe_allow_html=True)
+
+    st.markdown('<div class="blue-section">', unsafe_allow_html=True)
+
+
     bottom_left, bottom_right = st.columns([0.7, 0.3])
 
     with bottom_left:
@@ -271,3 +296,6 @@ with bottom:
                     [3, 5, 10],
                     key="selected_hebel"
                 )
+
+
+    st.markdown('</div>', unsafe_allow_html=True)

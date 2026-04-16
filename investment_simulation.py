@@ -3,19 +3,13 @@ import pandas as pd
 from investment import Investment
 
 
-#def get_comulative_investment_value(investments_list):
-#    total_value = 0
-#    for inv in investments_list:
-#        if inv.active:
-#            total_value += inv.get_investment_value()
-#    return total_value
-
 def get_cumulative_investment_value(investments_list):
     total_value = 0
     for inv in investments_list:
         if inv.active:
             total_value += inv.get_investment_value()
     return total_value
+
 
 @st.cache_data
 def run_simulation(source, filter, selected_hebel, selected_budget, remaining_budget):
@@ -60,16 +54,43 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
             #Fall eines Knockouts, berechnet aus Hebel
             if  inv.get_hebel() == 0:
                 inv.reset_investment(type="knockout")
+                rows.append({
+                    "date": df["date"].loc[i],
+                    "inv_id": inv.id,
+                    "gewinn": inv.get_gewinn(),
+                    "closing_reason": inv.closing_reason,
+                    "starting_investment": inv.starting_investment,
+                    "active": inv.active,
+                    "cumulative_investment_value": get_cumulative_investment_value(investments_list),
+                })
                 continue
 
             #Fall eines Knockouts, berechnet aus aktuellem Wert des Investments
             if inv.get_investment_value() <= 0:
                 inv.reset_investment(type="knockout")
+                rows.append({
+                    "date": df["date"].loc[i],
+                    "inv_id": inv.id,
+                    "gewinn": inv.get_gewinn(),
+                    "closing_reason": inv.closing_reason,
+                    "starting_investment": inv.starting_investment,
+                    "active": inv.active,
+                    "cumulative_investment_value": get_cumulative_investment_value(investments_list),
+                })
                 continue
 
             #Fall eines regulären Verkaufs, weil der Hebel unter 1.5x gefallen ist
             if inv.get_hebel() <= 1.5:
                 inv.reset_investment(type="sell")
+                rows.append({
+                    "date": df["date"].loc[i],
+                    "inv_id": inv.id,
+                    "gewinn": inv.get_gewinn(),
+                    "closing_reason": inv.closing_reason,
+                    "starting_investment": inv.starting_investment,
+                    "active": inv.active,
+                    "cumulative_investment_value": get_cumulative_investment_value(investments_list),
+                })
                 continue
 
             # speichern der Werte in zuordbaren Reihen
