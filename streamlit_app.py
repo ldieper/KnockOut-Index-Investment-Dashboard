@@ -99,13 +99,18 @@ def calculate_metrics(df_investment):
 
 
 @st.cache_data
-def precompute_all_simulations():
+def precompute_all_simulations(debug_index=None, debug_hebels=None):
     index_map = {
         "DAX": "yfinance_indizes/^GDAXI.json",
         "S&P 500": "yfinance_indizes/^GSPC.json",
         "FSTE China 50": "yfinance_indizes/^HSI.json"
     }
-    hebels = [3, 5, 10]
+    
+    # Debug mit 1 Index und 1 Hebel
+    if debug_index:
+        index_map = {debug_index: index_map[debug_index]}
+    
+    hebels = debug_hebels if debug_hebels else [3, 5, 10]
     results = {}
 
     for index_name, file_path in index_map.items():
@@ -153,7 +158,8 @@ def precompute_all_simulations():
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
     with st.spinner("Precomputing.. Das dauert bis zu 3 Minuten. Ein guter Moment um neuen Kaffe zu holen. ☕"):
-        st.session_state.all_results = precompute_all_simulations()
+        # DEBUG: Ändere hier für schnelleres Debuggen
+        st.session_state.all_results = precompute_all_simulations(debug_index="DAX", debug_hebels=[3]) #ohne Debug func()
         st.session_state.simulations_loaded = True
     st.rerun()
 
