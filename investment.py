@@ -50,6 +50,7 @@ class Investment:
 
             if type == "knockout":
                 self.closing_reason = 0
+                self.gewinn = -self.starting_investment #Verlust entspricht dem investierten Betrag (bei update_gewinn wäre dann 0 - starting investment)
             elif type == "sell": 
                 self.closing_reason = 1
             elif type == "not_enough_money": 
@@ -81,8 +82,7 @@ class Investment:
                 abstand = self.source.loc[i, "index_wert"] - self.get_current_knockout_barrier()
                 hebel = self.source.loc[i, "index_wert"] / abstand if abstand > 0 else 0
                 self.hebel = min(hebel, 100)  # Cap bei Hebel von 100, um unrealistische Werte zu vermeiden
-        
-        
+                
 
         def get_investment_value(self):
             return self.investment_value

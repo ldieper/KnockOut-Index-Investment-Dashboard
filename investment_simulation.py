@@ -10,6 +10,13 @@ from investment import Investment
 #            total_value += inv.get_investment_value()
 #    return total_value
 
+def get_cumulative_investment_value(investments_list):
+    total_value = 0
+    for inv in investments_list:
+        if inv.active:
+            total_value += inv.get_investment_value()
+    return total_value
+
 @st.cache_data
 def run_simulation(source, filter, selected_hebel, selected_budget, remaining_budget):
     df = source.copy()
@@ -17,7 +24,7 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
     rows = [] #Zum unterscheiden der Reihen, der Investments
     investments_list = [] #Liste der Klassen von Investment
     investment_count = 0 #Zählt die Anzahl an Investment und wird für die Vergabe der inv.id verwendet
-    cumulative_investment_value = 0 #Kumulativer Wert aller Investments, um die Rendite und aktuelleb Stand zu berechnen
+    cumulative_value = 0 #Kumulativer Wert aller Investments, um die Rendite und aktuelleb Stand zu berechnen
 
     for i in df[filter].index:
 
@@ -37,6 +44,9 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
             new_inv.start_investment() #Startet das Investment
             remaining_budget -= new_inv.get_investment_value() #Abziehen des Investments vom Budget
 
+        # Calculate cumulative value at this timestamp
+        timestamp_cumulative_value = 0
+        
         for inv in investments_list:
 
             if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
@@ -62,21 +72,21 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 inv.reset_investment(type="sell")
                 continue
 
-            value = inv.get_investment_value()
-            cumulative_value += value
-
             # speichern der Werte in zuordbaren Reihen
             rows.append({
                 "date": df["date"].loc[i],
                 "inv_id": inv.id,
                 "knockout_barrier": inv.get_current_knockout_barrier(),
-                "current_value": value,
+                "current_value": inv.get_investment_value(),
                 "hebel": inv.get_hebel(),
                 "gewinn": inv.get_gewinn(),
                 "closing_reason": inv.closing_reason,
                 "starting_investment": inv.starting_investment,
                 "active": inv.active,
+                "cumulative_investment_value": get_cumulative_investment_value(investments_list),
             })
     df_investment = pd.DataFrame(rows) #Dataframe aus den gesammelten Reihen der Investments
 
     return investments_list, remaining_budget, df_investment
+
+

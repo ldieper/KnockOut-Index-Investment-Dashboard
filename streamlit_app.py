@@ -90,13 +90,14 @@ with top:
 
 
     #Sim-Run
-    df_investment, remaining_budget = run_simulation(
+    investments_list, remaining_budget, df_investment = run_simulation(
         df_all_index,
         mask,
         st.session_state.selected_hebel,
         selected_budget,
         remaining_budget
     )
+    
     
     
     #discarded_count = sum(1 for inv in investments_list if inv.closing_reason == 2) #Summe der fehlerhaften Investments, bei denen nicht genug Geld für den Kauf einer Option vorhanden war
@@ -106,37 +107,38 @@ with top:
     #sells_count = sum(1 for inv in investments_list if inv.closing_reason == 1) #True = Sell
     #knockouts_count = sum(1 for inv in investments_list if inv.closing_reason == 0) #False = Knockout
     #not_enough_money_count = sum(1 for inv in investments_list if inv.closing_reason == 2) #Not enough money
+
     #loss_sum = sum(inv.starting_investment for inv in investments_list if inv.closing_reason == 0) #Summe der Verluste durch Knockout
     #profit_sum = sum(inv.get_gewinn() for inv in investments_list if inv.closing_reason != 2) #Summe der Gewinne durch regulären Verkauf
     #final_gewinn = round(profit_sum - loss_sum, 2)
     #total_invested_sum = sum(inv.starting_investment for inv in investments_list if inv.closing_reason != 2) #Summe des investierten Kapitals (ohne fehlerhafte Investments)
     #total_rendite = round(final_gewinn / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0 #Rendite in Prozent
 
-    discarded_count = (df_investment["closing_reason"] == 2).sum()
-    trades_count = (df_investment["closing_reason"] != 2).sum()
-    active_trades = df_investment["active"].sum()
-    closed_trades = (~df_investment["active"]).sum()
-    sells_count = (df_investment["closing_reason"] == 1).sum()
-    knockouts_count = (df_investment["closing_reason"] == 0).sum()
-    not_enough_money_count = (df_investment["closing_reason"] == 2).sum()
+    discarded_count = (df_investment["closing_reason"] == 2).sum() #
+    
+    closed_trades = (~df_investment["active"]).sum() #
+    sells_count = (df_investment["closing_reason"] == 1).sum() #
+    knockouts_count = (df_investment["closing_reason"] == 0).sum() #
+    not_enough_money_count = (df_investment["closing_reason"] == 2).sum() #
+    cumulative_value = df_investment["cumulative_investment_value"].iloc[-1] #
 
-    loss_sum = df_investment.loc[
-        df_investment["closing_reason"] == 0,
-        "starting_investment"
-    ].sum()
-    profit_sum = df_investment.loc[
-        df_investment["closing_reason"] != 2,
-        "gewinn"
-    ].sum()
-    final_gewinn = round(profit_sum - loss_sum, 2)
-    total_invested_sum = df_investment.loc[
-        df_investment["closing_reason"] != 2,
-        "starting_investment"
-    ].sum()
+
+    final_trades = df_investment.groupby("inv_id").last()
+    valid_trades = final_trades[final_trades["closing_reason"] != 2]
+
+    final_gewinn = round(valid_trades["gewinn"].sum(), 2)
+    trades_count = (valid_trades["closing_reason"] != 2).sum() #
+    active_trades = (valid_trades["active"] == True).sum() #
+    loss_sum = round(valid_trades.loc[valid_trades["closing_reason"] == 0, "starting_investment"].sum(), 2)
+
+
+    print(final_gewinn)
+
+    total_invested_sum = df_investment.loc[df_investment["closing_reason"] != 2,"starting_investment"].sum()
+
     total_rendite = round(final_gewinn / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0
 
 
-    df_investment = pd.DataFrame(rows) #Dataframe aus den gesammelten Reihen der Investments
     df_all_index["date"] = pd.to_datetime(df_all_index["date"])
     df_investment["date"] = pd.to_datetime(df_investment["date"])
 
@@ -190,64 +192,63 @@ with top:
 
 
 with bottom:
-    with st.container(border=False):
 
-        bottom_left, bottom_right = st.columns([0.7, 0.3])
+    bottom_left, bottom_right = st.columns([0.7, 0.3])
 
-        with bottom_left:
-            with st.container(border=True):
+    with bottom_left:
+        with st.container(border=True):
 
-                st.subheader("Aktuelle Kennzahlen")
-                
+            st.subheader("Aktuelle Kennzahlen")
+            
 
-                col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4, col5 = st.columns(5)
 
-                with col1:
-                    st.metric("Investment-Kurs", f"€ {round(rows[-1]['cumulative_investment_value'], 2):,.2f}".replace(",", " "), "Test")
-                    current_index_wert = float(df_all_index["index_wert"].iloc[-1])
-                    st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "), "Test")
+            with col1:
+                st.metric("Investment-Kurs", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "), "Test")
+                current_index_wert = float(df_all_index["index_wert"].iloc[-1])
+                st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "), "Test")
 
-                with col2:
-                    st.metric("Gewinn", f"€ {final_gewinn:,.2f}".replace(",", " "), "Test")
-                    st.metric("Verkäufe (Hebel < 1.5x)", f"{sells_count}", "Test")
+            with col2:
+                st.metric("Gewinn", f"€ {final_gewinn:,.2f}".replace(",", " "), "Test")
+                st.metric("Verkäufe (Hebel < 1.5x)", f"{sells_count}", "Test")
 
-                with col3:
-                    st.metric("Verluste", f"€ {round(loss_sum, 2):,.2f}".replace(",", " "), "Test")
-                    st.metric("KnockOut", f"{knockouts_count}", "Test" )
+            with col3:
+                st.metric("Verluste", f"€ {round(loss_sum, 2):,.2f}".replace(",", " "), "Test")
+                st.metric("KnockOut", f"{knockouts_count}", "Test" )
 
-                with col4:
-                    st.metric("Rendite", f"{total_rendite} %", "Test")
-                    st.metric("Anzahl aktiver Investments", f"{active_trades}", "Test")
-                    #st.metric("Fehlerhafte Investments (kein Geld)", f"{not_enough_money_count}", "Test")
+            with col4:
+                st.metric("Rendite", f"{total_rendite} %", "Test")
+                st.metric("Anzahl aktiver Investments", f"{active_trades}", "Test")
+                #st.metric("Fehlerhafte Investments (kein Geld)", f"{not_enough_money_count}", "Test")
 
-                with col5:
-                    st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "), "Test")
-                    st.metric("Monatliches Budget", f"€ 500,00", "Test")
+            with col5:
+                st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "), "Test")
+                st.metric("Monatliches Budget", f"€ 500,00", "Test")
 
-        with bottom_right:
-            with st.container(border=True):
+    with bottom_right:
+        with st.container(border=True):
 
-                st.subheader("Einstellungen")
+            st.subheader("Einstellungen")
 
-                col1, col2 = st.columns(2)
+            col1, col2 = st.columns(2)
 
-                with col1:
-                    st.radio(
-                        "Index",
-                        ["DAX", "S&P 500", "FSTE China 50"],
-                        key="selected_index"
-                    )
+            with col1:
+                st.radio(
+                    "Index",
+                    ["DAX", "S&P 500", "FSTE China 50"],
+                    key="selected_index"
+                )
 
-                with col2:
-                    st.radio(
-                        "Hebel",
-                        [3, 5, 10],
-                        key="selected_hebel"
-                    )
+            with col2:
+                st.radio(
+                    "Hebel",
+                    [3, 5, 10],
+                    key="selected_hebel"
+                )
 
-                #with col3:  
-                #   st.metric
-                #    investment_break_type = st.radio(
-                #        "Wähle die Dauer der Investitionsperiode",
-                #       ["20 Tage", "Bis Wiederanstieg auf gleichen Wert"]
-                #    )
+            #with col3:  
+            #   st.metric
+            #    investment_break_type = st.radio(
+            #        "Wähle die Dauer der Investitionsperiode",
+            #       ["20 Tage", "Bis Wiederanstieg auf gleichen Wert"]
+            #    )
