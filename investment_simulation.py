@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from investment import Investment
 
 
@@ -14,48 +15,53 @@ def get_cumulative_investment_value(investments_list):
 @st.cache_data
 def run_simulation(source, filter, selected_hebel, selected_budget, remaining_budget):
     df = source.copy()
+    
+    # Convert to numpy arrays for fast access (MAJOR PERFORMANCE IMPROVEMENT)
+    index_values = df["index_wert"].values
+    index_growth = df["index_growth"].values
+    dates = df["date"].values
 
-    rows = [] #Zum unterscheiden der Reihen, der Investments
-    investments_list = [] #Liste der Klassen von Investment
-    investment_count = 0 #Zählt die Anzahl an Investment und wird für die Vergabe der inv.id verwendet
-    cumulative_value = 0 #Kumulativer Wert aller Investments, um die Rendite und aktuelleb Stand zu berechnen
+    rows = []
+    investments_list = []
+    investment_count = 0
+    cumulative_value = 0
 
     for i in df[filter].index:
 
-        if i%20 == 0: #Alle 20 Handelstage (ca. 1 Monat umgerechnet) wird das monatliche Budget erhöht
+        if i % 20 == 0:
             remaining_budget += selected_budget
 
         if df.loc[i, "index_investpoint"]:
             
             investment_count += 1
-            new_inv = Investment(source=df, #Erstellen eines neuen Investments
-                            i=i,
-                            selected_hebel=selected_hebel,
-                            selected_budget=selected_budget,
-                            remaining_budget=remaining_budget,
-                            inv_id=investment_count) #ID des Investments == Invest_counter
-            investments_list.append(new_inv) #Hinzufügen zu investments Liste
-            new_inv.start_investment() #Startet das Investment
+            # Pass numpy arrays to Investment instead of dataframe
+            new_inv = Investment(
+                index_values=index_values,
+                index_growth=index_growth,
+                dates=dates,
+                i=i,
+                selected_hebel=selected_hebel,
+                selected_budget=selected_budget,
+                remaining_budget=remaining_budget,
+                inv_id=investment_count)
+            investments_list.append(new_inv)
+            new_inv.start_investment()
             if new_inv.active:
-                remaining_budget -= new_inv.get_investment_value() #Abziehen des Investments vom Budget
+                remaining_budget -= new_inv.get_investment_value()
 
-        # Calculate cumulative value at this timestamp
-        timestamp_cumulative_value = 0
-        
         for inv in investments_list:
 
-            if not inv.active: #Falls das Investment bereits inaktiv ist zu diesem Zeitpunkt
+            if not inv.active:
                 continue
 
-            inv.update_current_knockout_barrier(i=i) #Aktualisiert die Knockoutbarriere
-            inv.update_investment_value(i=i) #Aktualisiert den aktuellen Wert des Investments
-            inv.update_hebel(i=i) #Aktualisiert den Hebel des Investments
-            inv.update_gewinn() #Aktualisiert die Rendite des Investments
+            inv.update_current_knockout_barrier(i=i)
+            inv.update_investment_value(i=i)
+            inv.update_hebel(i=i)
+            inv.update_gewinn()
 
-            #Fall eines Knockouts, berechnet aus Hebel
-            if  inv.get_hebel() == 0:
+            if inv.get_hebel() == 0:
                 inv.reset_investment(type="knockout")
-                closing_date = df.loc[i, "date"] #Setzt das Endedatum auf den aktuellen Zeitpunkt
+                closing_date = df.loc[i, "date"]
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
@@ -68,10 +74,9 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 })
                 continue
 
-            #Fall eines Knockouts, berechnet aus aktuellem Wert des Investments
             if inv.get_investment_value() <= 0:
                 inv.reset_investment(type="knockout")
-                closing_date = df.loc[i, "date"] #Setzt das Endedatum auf den aktuellen Zeitpunkt
+                closing_date = df.loc[i, "date"]
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
@@ -84,10 +89,9 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 })
                 continue
 
-            #Fall eines regulären Verkaufs, weil der Hebel unter 1.5x gefallen ist
             if inv.get_hebel() <= 1.5:
                 inv.reset_investment(type="sell")
-                closing_date = df.loc[i, "date"] #Setzt das Endedatum auf den aktuellen Zeitpunkt
+                closing_date = df.loc[i, "date"]
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
@@ -100,7 +104,6 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 })
                 continue
 
-            # speichern der Werte in zuordbaren Reihen
             rows.append({
                 "date": df["date"].loc[i],
                 "inv_id": inv.id,
@@ -114,7 +117,7 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 "cumulative_investment_value": get_cumulative_investment_value(investments_list),
                 "starting_date": inv.starting_date,
             })
-    df_investment = pd.DataFrame(rows) #Dataframe aus den gesammelten Reihen der Investments
+    df_investment = pd.DataFrame(rows)
 
     return investments_list, remaining_budget, df_investment
 

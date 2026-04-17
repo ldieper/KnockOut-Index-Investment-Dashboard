@@ -100,6 +100,24 @@ def calculate_metrics(df_investment):
     }
 
 
+def filter_nearest_barriers(df_plot, top_n=2):
+    """Pre-compute nearest barriers PER DATE in Python (much faster than Altair transform_window)"""
+    if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
+        return df_plot
+    
+    # Calculate absolute distance from index to barrier
+    df_plot["abs_dist"] = (df_plot["index_wert"] - df_plot["knockout_barrier"]).abs()
+    
+    # Rank by distance within each date group, keep only top N
+    df_plot["rank"] = df_plot.groupby("date")["abs_dist"].rank(method="first")
+    df_filtered = df_plot[df_plot["rank"] <= top_n].copy()
+    
+    # Drop the temporary columns
+    df_filtered = df_filtered.drop(columns=["abs_dist", "rank"])
+    
+    return df_filtered
+
+
 @st.cache_data
 def precompute_all_simulations(debug_index=None, debug_hebels=None):
     index_map = {
@@ -159,9 +177,9 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
 
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
-    with st.spinner("Precomputing.. Das dauert bis zu 3 Minuten. Ein guter Moment um neuen Kaffe zu holen. ☕"):
+    with st.spinner("Precomputing.. Das dauert bis zu 30 Sekunden. Ein guter Moment um etwas Kaffe zu trinken. ☕"):
         # DEBUG: Ändere hier für schnelleres Debuggen
-        st.session_state.all_results = precompute_all_simulations(debug_index="DAX", debug_hebels=[3]) #ohne Debug func()
+        st.session_state.all_results = precompute_all_simulations(debug_index="DAX", debug_hebels=[3]) #Debug: debug_index="DAX", debug_hebels=[3]
         st.session_state.simulations_loaded = True
     st.rerun()
 
@@ -185,7 +203,9 @@ bottom = st.container(border=True)
 with top:
     st.subheader(f"Kursverlauf - {st.session_state.selected_index}")
 
-    base = alt.Chart(df_plot).encode(
+    df_plot_filtered = filter_nearest_barriers(df_plot.copy(), top_n=2)
+
+    base = alt.Chart(df_plot_filtered).encode(
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
 
@@ -197,14 +217,6 @@ with top:
         base.mark_line(color="#c4265e").encode(
             y="knockout_barrier:Q",
             detail="inv_id:N"
-        ).transform_calculate(
-            abs_dist="abs(datum.index_wert - datum.knockout_barrier)"
-        ).transform_window(
-            rank="rank(abs_dist)",
-            sort=[alt.SortField("abs_dist", order="ascending")],
-            groupby=["date"]
-        ).transform_filter(
-            alt.datum.rank <= 2
         )
     )
 
@@ -247,7 +259,7 @@ with mid:
             on_select="rerun",
             selection_mode="single-row"
         )
-        
+
         selected_row = None
         if event.selection.rows:
             selected_row = event.selection.rows[0]
