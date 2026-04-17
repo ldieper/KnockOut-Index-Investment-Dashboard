@@ -247,13 +247,12 @@ with mid:
             on_select="rerun",
             selection_mode="single-row"
         )
-
-    selected_row = None
-
-    if event.selection.rows:
-        selected_row = event.selection.rows[0]
-    else:
-        selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
+        
+        selected_row = None
+        if event.selection.rows:
+            selected_row = event.selection.rows[0]
+        else:
+            selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
 
     
     with mid_right:
