@@ -22,7 +22,9 @@ if "all_results" not in st.session_state:
 
 
 #Funktionen
+@st.cache_data
 def load_df(file_path):
+    """Load JSON index data with caching - avoid re-reading files"""
     df = pd.read_json(file_path, orient="index")
     df.index = pd.to_datetime(df.index)
     df.columns = ["index_wert"]
@@ -33,10 +35,8 @@ def load_df(file_path):
 def prepare_investment_data(df_all_index):
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
     
-    df_all_index["calculated_hebel"] = None
-    df_all_index["calculated_knockout_barrier"] = None
+    # Only create columns that are actually used (avoid unnecessary memory)
     df_all_index["index_investpoint"] = None
-    df_all_index['current_invest_wert'] = None
 
     df_all_index["yearly_high"] = (
         df_all_index["index_wert"]
@@ -100,22 +100,72 @@ def calculate_metrics(df_investment):
     }
 
 
+def create_investment_detail_plot(df_investment, df_all_index, inv_id):
+    """Create a fast-loading detail plot for a single investment with proper dual-axis"""
+    if inv_id is None:
+        return None
+    
+    # Filter to only this investment (lightweight)
+    df_inv = df_investment[df_investment["inv_id"] == inv_id][["date", "current_value", "hebel", "knockout_barrier"]].copy()
+    
+    if df_inv.empty:
+        return None
+    
+    # Merge with index data for comparison
+    df_plot_detail = pd.merge(
+        df_all_index[["date", "index_wert"]],
+        df_inv,
+        on="date",
+        how="inner"
+    )
+    
+    # Create base chart with X axis
+    base = alt.Chart(df_plot_detail).encode(
+        x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
+    )
+    
+    # LEFT AXIS: Index value and Knockout barrier (share same realistic scale)
+    line_index = base.mark_line(color="#BA2BAC", size=2).encode(
+        y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False))
+    )
+    
+    line_barrier = base.mark_line(color="#c4265e", strokeDash=[5, 5], size=2).encode(
+        y=alt.Y("knockout_barrier:Q", scale=alt.Scale(zero=False))
+    )
+    
+    # RIGHT AXIS: Investment value (its own independent scale)
+    line_investment = base.mark_line(color="#e2e22e", size=2.5).encode(
+        y=alt.Y("current_value:Q", title="Investment Value (€)", scale=alt.Scale(zero=False), axis=alt.Axis(orient="right"))
+    )
+    
+    # Layer: index and barrier on left, investment on right with independent scales
+    left_chart = alt.layer(line_index, line_barrier)
+    
+    chart = alt.layer(left_chart, line_investment).resolve_scale(
+        y="independent"
+    ).properties(
+        height=250,
+        title=f"Investment: {int(inv_id)}",
+    )
+    
+    return chart
+
+
 def filter_nearest_barriers(df_plot, top_n=2):
     """Pre-compute nearest barriers PER DATE in Python (much faster than Altair transform_window)"""
     if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
         return df_plot
     
-    # Calculate absolute distance from index to barrier
-    df_plot["abs_dist"] = (df_plot["index_wert"] - df_plot["knockout_barrier"]).abs()
+    # Calculate absolute distance from index to barrier (avoid copy - use boolean mask)
+    abs_dist = (df_plot["index_wert"] - df_plot["knockout_barrier"]).abs()
     
     # Rank by distance within each date group, keep only top N
-    df_plot["rank"] = df_plot.groupby("date")["abs_dist"].rank(method="first")
-    df_filtered = df_plot[df_plot["rank"] <= top_n].copy()
+    rank = df_plot.groupby("date").cumcount()
+    df_plot_temp = df_plot.assign(abs_dist=abs_dist, rank=rank)
+    df_plot_temp["rank"] = df_plot_temp.groupby("date")["abs_dist"].rank(method="first")
     
-    # Drop the temporary columns
-    df_filtered = df_filtered.drop(columns=["abs_dist", "rank"])
-    
-    return df_filtered
+    # Filter using boolean mask (no .copy() needed)
+    return df_plot_temp[df_plot_temp["rank"] <= top_n].drop(columns=["abs_dist", "rank"])
 
 
 @st.cache_data
@@ -152,13 +202,25 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
             # Kennzahlen berechnen
             metrics = calculate_metrics(df_investment)
 
-            # Plotten
+            # Plotten - filter investment data and use INNER join (much faster than LEFT)
+            # Only keep rows where we have investment data
+            df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
+            
             df_plot = pd.merge(
                 df_all_index,
-                df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value", "starting_date", "closing_date"]],
+                df_investment_plot,
                 on="date",
                 how="left"
             )
+            
+            # Pre-compute table data to avoid recalculation on every render
+            # Filter and select only needed columns early to reduce memory
+            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "gewinn", "current_value"]].copy()
+            df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
+            df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
+            df_table["closing_date"] = df_table["closing_date"].dt.strftime("%d.%m.%y")
+            df_table["current_value"] = df_table["current_value"].where(df_table["active"], 0)
+            df_table = df_table.sort_values(by=["inv_id"], ascending=True)
 
             cumulative_value = df_investment["cumulative_investment_value"].iloc[-1]
 
@@ -167,6 +229,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
                 "df_all_index": df_all_index,
                 "df_investment": df_investment,
                 "df_plot": df_plot,
+                "df_table": df_table,
                 "remaining_budget": remaining_budget,  
                 "cumulative_value": cumulative_value,
                 "metrics": metrics,
@@ -203,7 +266,8 @@ bottom = st.container(border=True)
 with top:
     st.subheader(f"Kursverlauf - {st.session_state.selected_index}")
 
-    df_plot_filtered = filter_nearest_barriers(df_plot.copy(), top_n=2)
+    # Use pre-filtered barriers (no .copy() needed)
+    df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
 
     base = alt.Chart(df_plot_filtered).encode(
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
@@ -236,45 +300,6 @@ with top:
 
 with mid:
 
-    mid_left, mid_right = st.columns([0.35, 0.65])
-
-    df_filtered = df_investment[df_investment["closing_reason"] != 2].copy()
-    df_filtered = df_filtered.groupby("inv_id").last().reset_index(drop=False)
-
-    df_filtered["starting_date"] = df_filtered["starting_date"].dt.strftime("%d.%m.%y")
-    df_filtered["closing_date"] = df_filtered["closing_date"].dt.strftime("%d.%m.%y")
-
-    df_filtered["current_value"] = df_filtered["current_value"].where(df_filtered["active"], 0)
-
-    df_filtered = df_filtered.sort_values(by=["active", "inv_id"], ascending=True)
-
-    with mid_left:
-        st.subheader("Investitionen")
-
-
-        event = st.dataframe(
-            df_filtered[["inv_id", "active", "starting_date", "closing_date", "closing_reason", "gewinn", "current_value"]],
-            hide_index=True,
-            width="stretch",
-            on_select="rerun",
-            selection_mode="single-row"
-        )
-
-        selected_row = None
-        if event.selection.rows:
-            selected_row = event.selection.rows[0]
-        else:
-            selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
-
-    
-    with mid_right:
-        st.subheader("Details zum Investment")
-        st.write(f"**Investment ID:** {df_filtered.loc[selected_row, 'inv_id']}")
-
-
-
-with bottom:
-
     st.markdown("""
     <style>
 
@@ -297,9 +322,10 @@ with bottom:
     st.markdown('<div class="blue-section">', unsafe_allow_html=True)
 
 
-    bottom_left, bottom_right = st.columns([0.7, 0.3])
+    mid_left, mid_right = st.columns([0.7, 0.3])
 
-    with bottom_left:
+    with mid_left:
+
         with st.container(border=True):
 
             st.subheader("Aktuelle Kennzahlen")
@@ -328,7 +354,7 @@ with bottom:
                 st.metric("Monatliches Budget", f"€ 500,00", "Test")
                 #st.metric("Anzahl nicht ausgeführter Investments (zu wenig Budget)", f"{metrics['not_enough_money_count']}", "Test")
 
-    with bottom_right:
+    with mid_right:
         with st.container(border=True):
 
             st.subheader("Einstellungen")
@@ -351,3 +377,72 @@ with bottom:
 
 
     st.markdown('</div>', unsafe_allow_html=True)
+
+
+with bottom:
+
+    bottom_left, bottom_right = st.columns([0.35, 0.65])
+
+    # Use pre-computed table data (already filtered, formatted, and sorted)
+    df_filtered = current["df_table"]
+
+    with bottom_left:
+        st.subheader("Investitionen")
+        
+        event = st.dataframe(
+            df_filtered[["inv_id", "active", "starting_date", "closing_date", "closing_reason", "gewinn", "current_value"]],
+            hide_index=True,
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row"
+        )
+
+        selected_row = None
+        if event.selection.rows:
+            selected_row = event.selection.rows[0]
+        else:
+            selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
+
+    
+    with bottom_right:
+        st.subheader("Details zum Investment")
+
+        if selected_row is not None and selected_row < len(df_filtered):
+            selected_inv_id = df_filtered.iloc[selected_row]['inv_id']
+            
+            # Create and display the investment detail chart
+            detail_chart = create_investment_detail_plot(df_investment, df_all_index, selected_inv_id)
+            if detail_chart:
+                st.altair_chart(detail_chart, width="stretch")
+            
+            # Get the actual row data
+            selected_row_data = df_filtered.iloc[selected_row]
+            
+            # Map closing reason to readable text
+
+            closing_reason_map = {0.0: "KnockOut", 1.0: "Verkauf", 2.0: "❌ Keine Mittel", None: "Aktiv"}
+            closing_reason_value = selected_row_data['closing_reason']
+            if closing_reason_value is None or pd.isna(closing_reason_value):
+                closing_reason_text = "Aktiv"
+            else:
+                closing_reason_text = closing_reason_map.get(float(closing_reason_value), "Unbekannt")
+            
+
+            col1, col2, col3 = st.columns(3)
+
+            # Display metrics with proper formatting
+            with col1:
+                st.metric("Ausgang", closing_reason_text)
+            
+            with col2:
+                gewinn_value = selected_row_data['gewinn']
+                st.metric("Gewinn", f"€ {gewinn_value:,.2f}".replace(",", " "))
+            with col3:
+                if selected_row_data['active']:
+                    current_value = selected_row_data['current_value']
+                    st.metric("Aktueller Wert", f"€ {current_value:,.2f}".replace(",", " "))
+        else:
+            st.info("Wähle ein Investment aus der Tabelle")
+
+
+
