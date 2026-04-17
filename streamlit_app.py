@@ -242,7 +242,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
 if not st.session_state.simulations_loaded:
     with st.spinner("Precomputing.. Das dauert bis zu 30 Sekunden. Ein guter Moment um etwas Kaffe zu trinken. ☕"):
         # DEBUG: Ändere hier für schnelleres Debuggen
-        st.session_state.all_results = precompute_all_simulations(debug_index="DAX", debug_hebels=[3]) #Debug: debug_index="DAX", debug_hebels=[3]
+        st.session_state.all_results = precompute_all_simulations() #Debug: debug_index="DAX", debug_hebels=[3]
         st.session_state.simulations_loaded = True
     st.rerun()
 
@@ -381,16 +381,24 @@ with mid:
 
 with bottom:
 
-    bottom_left, bottom_right = st.columns([0.35, 0.65])
+    bottom_left, bottom_right = st.columns([0.12, 0.88])
 
     # Use pre-computed table data (already filtered, formatted, and sorted)
     df_filtered = current["df_table"]
 
     with bottom_left:
         st.subheader("Investitionen")
+
+        closing_reason_map = {0.0: "KnockOut", 1.0: "Verkauf", 2.0: "Keine Mittel", None: "Aktiv"}
+        
+        # Add mapped closing_reason column to display
+        df_display = df_filtered.copy()
+        df_display["closing_reason"] = df_display["closing_reason"].apply(
+            lambda x: closing_reason_map.get(float(x), "Unbekannt") if pd.notna(x) else "Aktiv"
+        )
         
         event = st.dataframe(
-            df_filtered[["inv_id", "active", "starting_date", "closing_date", "closing_reason", "gewinn", "current_value"]],
+            df_display[["inv_id", "closing_reason"]],
             hide_index=True,
             width="stretch",
             on_select="rerun",
@@ -419,8 +427,6 @@ with bottom:
             selected_row_data = df_filtered.iloc[selected_row]
             
             # Map closing reason to readable text
-
-            closing_reason_map = {0.0: "KnockOut", 1.0: "Verkauf", 2.0: "❌ Keine Mittel", None: "Aktiv"}
             closing_reason_value = selected_row_data['closing_reason']
             if closing_reason_value is None or pd.isna(closing_reason_value):
                 closing_reason_text = "Aktiv"
@@ -428,19 +434,27 @@ with bottom:
                 closing_reason_text = closing_reason_map.get(float(closing_reason_value), "Unbekannt")
             
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 ,col4, col5= st.columns(5)
 
             # Display metrics with proper formatting
             with col1:
-                st.metric("Ausgang", closing_reason_text)
+                st.metric("Status", closing_reason_text)
             
             with col2:
                 gewinn_value = selected_row_data['gewinn']
                 st.metric("Gewinn", f"€ {gewinn_value:,.2f}".replace(",", " "))
             with col3:
+                starting_date = selected_row_data['starting_date']
+                st.metric("Start", f"{starting_date}")
+            with col4:
                 if selected_row_data['active']:
                     current_value = selected_row_data['current_value']
                     st.metric("Aktueller Wert", f"€ {current_value:,.2f}".replace(",", " "))
+
+                elif not selected_row_data['active']:
+                    closing_date = selected_row_data['closing_date']
+                    st.metric("Ende", f" {closing_date}")
+                
         else:
             st.info("Wähle ein Investment aus der Tabelle")
 
