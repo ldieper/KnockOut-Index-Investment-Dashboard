@@ -29,7 +29,7 @@ class Investment:
             abstand = self.source.loc[self.i, "index_wert"] - self.get_current_knockout_barrier()
             price_of_option = abstand * 0.01 #Bezugsverhältnis
 
-            max_accessible_budget = self.selected_budget * 0.5
+            max_accessible_budget = self.selected_budget * 1
             actual_invested_budget = min(max_accessible_budget, self.remaining_budget)
 
             if actual_invested_budget < price_of_option:

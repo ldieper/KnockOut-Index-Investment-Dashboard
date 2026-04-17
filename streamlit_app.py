@@ -69,7 +69,6 @@ def calculate_metrics(df_investment):
     final_trades = df_investment.groupby("inv_id").last()
 
     active_trades = final_trades["active"].sum()
-    print(final_trades)
 
     closed_trades = (~final_trades["active"]).sum()
     sells_count = (final_trades["closing_reason"] == 1).sum()
@@ -138,7 +137,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
             # Plotten
             df_plot = pd.merge(
                 df_all_index,
-                df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value"]],
+                df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value", "starting_date", "closing_date"]],
                 on="date",
                 how="left"
             )
@@ -180,6 +179,7 @@ metrics = current["metrics"]
 
 #Layout / UI
 top = st.container(border=True)
+mid = st.container(border=True)
 bottom = st.container(border=True)
 
 with top:
@@ -220,6 +220,46 @@ with top:
         y="independent"
     )
     st.altair_chart(combined_chart, width="stretch")
+
+
+with mid:
+
+    mid_left, mid_right = st.columns([0.35, 0.65])
+
+    df_filtered = df_investment[df_investment["closing_reason"] != 2].copy()
+    df_filtered = df_filtered.groupby("inv_id").last().reset_index(drop=False)
+
+    df_filtered["starting_date"] = df_filtered["starting_date"].dt.strftime("%d.%m.%y")
+    df_filtered["closing_date"] = df_filtered["closing_date"].dt.strftime("%d.%m.%y")
+
+    df_filtered["current_value"] = df_filtered["current_value"].where(df_filtered["active"], 0)
+
+    df_filtered = df_filtered.sort_values(by=["active", "inv_id"], ascending=True)
+
+    with mid_left:
+        st.subheader("Investitionen")
+
+
+        event = st.dataframe(
+            df_filtered[["inv_id", "active", "starting_date", "closing_date", "closing_reason", "gewinn", "current_value"]],
+            hide_index=True,
+            width="stretch",
+            on_select="rerun",
+            selection_mode="single-row"
+        )
+
+    selected_row = None
+
+    if event.selection.rows:
+        selected_row = event.selection.rows[0]
+    else:
+        selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
+
+    
+    with mid_right:
+        st.subheader("Details zum Investment")
+        st.write(f"**Investment ID:** {df_filtered.loc[selected_row, 'inv_id']}")
+
 
 
 with bottom:
@@ -275,6 +315,7 @@ with bottom:
             with col5:
                 st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "), "Test")
                 st.metric("Monatliches Budget", f"€ 500,00", "Test")
+                #st.metric("Anzahl nicht ausgeführter Investments (zu wenig Budget)", f"{metrics['not_enough_money_count']}", "Test")
 
     with bottom_right:
         with st.container(border=True):
