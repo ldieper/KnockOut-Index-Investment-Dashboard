@@ -64,12 +64,12 @@ The elements of the dashboard:
 
 ### Investment plot
 
-![Visual: Investment](image.png)
+![Visual: Investment](visuals/image.png)
 
 ### Key Metrics
 
-![Visual: Key Metrics](image-1.png)
+![Visual: Key Metrics](visuals/image-1.png)
 
 ### Individual Investment metrics
 
-![Visual: Individual Investment metrics](image-2.png)
+![Visual: Individual Investment metrics](visuals/image-2.png)
