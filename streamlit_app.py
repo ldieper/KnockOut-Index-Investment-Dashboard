@@ -1,18 +1,37 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
+from pathlib import Path
 from investment_simulation import run_simulation
 
 st.set_page_config(layout="wide")
 
 st.title("KnockOut-Investition auf Indizes")
 
+#Extrahiert die .json aus yfinance_indizes
+def get_index_map(folder="yfinance_indizes"):
+    index_map = {}
+    
+    for file in Path(folder).glob("*.json"):
+        # Use filename (without extension) as default name
+        name = file.stem
+        
+        # Optional: make names prettier
+        name = name.replace("^", "")  # remove ^ if present
+        
+        index_map[name] = str(file)
+    
+    return index_map
+
+
 #Init
+index_map = get_index_map()
+
 if "selected_index" not in st.session_state:
-    st.session_state.selected_index = "DAX"
+    st.session_state.selected_index = list(index_map.keys())[0]
 
 if "selected_hebel" not in st.session_state:
-    st.session_state.selected_hebel = 3.0
+    st.session_state.selected_hebel = 3
 
 if "simulations_loaded" not in st.session_state:
     st.session_state.simulations_loaded = False
@@ -24,13 +43,11 @@ if "all_results" not in st.session_state:
 #Funktionen
 @st.cache_data
 def load_df(file_path):
-    """Load JSON index data with caching - avoid re-reading files"""
     df = pd.read_json(file_path, orient="index")
     df.index = pd.to_datetime(df.index)
     df.columns = ["index_wert"]
     df.index.name = "date"
     return df.reset_index()
-
 
 def prepare_investment_data(df_all_index):
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
@@ -101,7 +118,6 @@ def calculate_metrics(df_investment):
 
 
 def create_investment_detail_plot(df_investment, df_all_index, inv_id):
-    """Create a fast-loading detail plot for a single investment with proper dual-axis"""
     if inv_id is None:
         return None
     
@@ -152,7 +168,6 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
 
 
 def filter_nearest_barriers(df_plot, top_n=2):
-    """Pre-compute nearest barriers PER DATE in Python (much faster than Altair transform_window)"""
     if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
         return df_plot
     
@@ -170,16 +185,11 @@ def filter_nearest_barriers(df_plot, top_n=2):
 
 @st.cache_data
 def precompute_all_simulations(debug_index=None, debug_hebels=None):
-    index_map = {
-        "DAX": "yfinance_indizes/^GDAXI.json",
-        "S&P 500": "yfinance_indizes/^GSPC.json",
-        "FSTE China 50": "yfinance_indizes/^HSI.json"
-    }
-    
-    # Debug mit 1 Index und 1 Hebel
+    index_map = get_index_map()
+
     if debug_index:
         index_map = {debug_index: index_map[debug_index]}
-    
+
     hebels = debug_hebels if debug_hebels else [3, 5, 10]
     results = {}
 
@@ -361,10 +371,12 @@ with mid:
 
             col1, col2 = st.columns(2)
 
+            index_map = get_index_map()
+
             with col1:
                 st.radio(
                     "Index",
-                    ["DAX", "S&P 500", "FSTE China 50"],
+                    list(index_map.keys()),
                     key="selected_index"
                 )
 
