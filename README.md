@@ -51,3 +51,7 @@ This typically reflects a recovery phase where the leveraged exposure diminishes
 
 Realized profits are not reinvested into future positions.
 Only the ongoing monthly contributions (€500) are used to fund new investments.
+
+## Dashboard
+
+![Visual: Investment](image.png)
