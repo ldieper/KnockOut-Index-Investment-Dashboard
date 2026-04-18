@@ -54,4 +54,16 @@ Only the ongoing monthly contributions (€500) are used to fund new investments
 
 ## Dashboard
 
+The elements of the dashboard:
+
+### Investment plot
+
 ![Visual: Investment](image.png)
+
+### Key Metrics
+
+![Visual: Key Metrics](image-1.png)
+
+### Individual Investment metrics
+
+![Visual: Individual Investment metrics](image-2.png)
