@@ -19,6 +19,12 @@ The main features of the dashboard are:
 - **Key performance metrics** for evaluating investment outcomes
 - **Detailed analysis** of individual investment periods
 
+## Planned features
+
+- [ ] Logic for variable index-imports (IndexName.json instead of hard values)
+  - [ ] Dynamic streamlit-radio for choosing between variable index-imports
+- [ ] Logic for comparison of Investment-strategy and "typical" World ETF investment
+
 ## The investment strategy in detail
 
 ### Capital Allocation
