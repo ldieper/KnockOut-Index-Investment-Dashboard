@@ -4,6 +4,12 @@ This **study project** is a Streamlit-based dashboard for simulating leveraged i
 
 The application is written in Python and currently supports simulations on DAX, FTSE 50, and S&P 500 indices, with stock Data starting in 2006. It provides an interactive interface to configure investment parameters and visualize key metrics.
 
+## Technology
+
+- `streamlit`
+- `python`
+- `yfinance`
+
 ## Key features include
 
 The main features of the dashboard are:
