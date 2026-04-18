@@ -126,10 +126,10 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     
     # LEFT AXIS: Index value and Knockout barrier (share same realistic scale)
     line_index = base.mark_line(color="#BA2BAC", size=2).encode(
-        y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False))
+        y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
     )
     
-    line_barrier = base.mark_line(color="#c4265e", strokeDash=[5, 5], size=2).encode(
+    line_barrier = base.mark_line(color="#c4265e", strokeDash=[5, 5], size=2).encode(   
         y=alt.Y("knockout_barrier:Q", scale=alt.Scale(zero=False))
     )
     
