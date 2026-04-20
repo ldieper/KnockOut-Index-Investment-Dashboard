@@ -24,6 +24,8 @@ The main features of the dashboard are:
 - [x] Logic for variable index-imports (IndexName.json instead of hard values)
 - [x] Dynamic streamlit-radio for choosing between variable index-imports
 - [ ] Logic for comparison of Investment-strategy and "typical" World ETF investment
+- [ ] Dynamic UI
+- [x] Legend for plots
 
 ## The investment strategy in detail
 

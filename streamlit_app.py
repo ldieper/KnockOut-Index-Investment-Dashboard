@@ -134,6 +134,19 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
         on="date",
         how="inner"
     )
+
+    legend = alt.Legend(
+    orient="top"
+    )
+
+    color = alt.Color(
+        "lines:N",
+        legend=legend,
+        scale=alt.Scale(
+            domain=["Index", "Barrier", "Investment"],
+            range=["#BA2BAC", "#c4265e", "#e2e22e"]
+        )
+    )
     
     # Create base chart with X axis
     base = alt.Chart(df_plot_detail).encode(
@@ -141,17 +154,26 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     )
     
     # LEFT AXIS: Index value and Knockout barrier (share same realistic scale)
-    line_index = base.mark_line(color="#BA2BAC", size=2).encode(
-        y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
+    line_index = base.transform_calculate(
+        lines="'Index'"
+        ).mark_line(size=2).encode(
+            y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
+            color=color
     )
     
-    line_barrier = base.mark_line(color="#c4265e", strokeDash=[5, 5], size=2).encode(   
-        y=alt.Y("knockout_barrier:Q", scale=alt.Scale(zero=False))
+    line_barrier = base.transform_calculate(
+        lines="'Barrier'"
+        ).mark_line(strokeDash=[5, 5], size=2).encode(   
+            y=alt.Y("knockout_barrier:Q", scale=alt.Scale(zero=False)),
+            color=color
     )
     
     # RIGHT AXIS: Investment value (its own independent scale)
-    line_investment = base.mark_line(color="#e2e22e", size=2.5).encode(
-        y=alt.Y("current_value:Q", title="Investment Value (€)", scale=alt.Scale(zero=False), axis=alt.Axis(orient="right"))
+    line_investment = base.transform_calculate(
+        lines="'Investment'"
+        ).mark_line(size=2.5).encode(
+            y=alt.Y("current_value:Q", title="Investment Value (€)", scale=alt.Scale(zero=False), axis=alt.Axis(orient="right")),
+            color=color
     )
     
     # Layer: index and barrier on left, investment on right with independent scales
@@ -184,13 +206,13 @@ def filter_nearest_barriers(df_plot, top_n=2):
 
 
 @st.cache_data
-def precompute_all_simulations(debug_index=None, debug_hebels=None):
+def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_index="GDAXI", debug_hebels=3
     index_map = get_index_map()
 
     if debug_index:
         index_map = {debug_index: index_map[debug_index]}
 
-    hebels = debug_hebels if debug_hebels else [3, 5, 10]
+    hebels = [debug_hebels] if debug_hebels else [3, 5, 10]
     results = {}
 
     for index_name, file_path in index_map.items():
@@ -225,7 +247,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None):
             
             # Pre-compute table data to avoid recalculation on every render
             # Filter and select only needed columns early to reduce memory
-            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "gewinn", "current_value"]].copy()
+            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "gewinn", "current_value", "starting_investment"]].copy()
             df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
             df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
             df_table["closing_date"] = df_table["closing_date"].dt.strftime("%d.%m.%y")
@@ -279,24 +301,44 @@ with top:
     # Use pre-filtered barriers (no .copy() needed)
     df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
 
+    legend = alt.Legend(
+        orient="none",
+        legendX=10,
+        legendY=10
+    )
+
     base = alt.Chart(df_plot_filtered).encode(
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
 
     left_axis_group = alt.layer(
-        base.mark_line(color="#BA2BAC").encode(
-            y=alt.Y("index_wert:Q", title="Index & Barrier Level")
+        base.transform_calculate(lines="'Index'").mark_line().encode(
+            y=alt.Y("index_wert:Q", title="Index & Barrier Level"),
+            color=alt.Color("lines:N", legend=legend,
+                            scale=alt.Scale(domain=["Index", "Barrier", "Investment"],
+                                            range=["#BA2BAC", "#c4265e", "#e2e22e"]))
         ),
 
-        base.mark_line(color="#c4265e").encode(
+        base.transform_calculate(lines="'Barrier'").mark_line().encode(
             y="knockout_barrier:Q",
-            detail="inv_id:N"
+            detail="inv_id:N",
+            color=alt.Color("lines:N", legend=None)
         )
     )
 
-    right_axis_group = alt.Chart(df_investment).mark_line(color="#e2e22e", size=2).encode(
+    right_axis_group = alt.Chart(df_investment).transform_calculate(
+        lines="'Investment'"
+    ).mark_line(size=2).encode(
         x="date:T",
         y=alt.Y("cumulative_investment_value:Q", title="Investment Value (€)"),
+        color=alt.Color(
+            "lines:N",
+            scale=alt.Scale(
+                domain=["Investment"],
+                range=["#e2e22e"]
+            ),
+            legend=None
+        )
     )
 
     combined_chart = alt.layer(
@@ -305,7 +347,10 @@ with top:
     ).resolve_scale(
         y="independent"
     )
+
     st.altair_chart(combined_chart, width="stretch")
+
+    st.write(f"Legende:")
 
 
 with mid:
@@ -315,14 +360,15 @@ with mid:
 
     div[data-testid="stMetric"] {
         padding: 12px;
-        /* border: 2px solid red; */
-        /* border-radius: 14px; */
+        border: 2px solid transparent;
+        border-radius: 14px;
         /* box-shadow: 0 2px 10px rgba(0,0,0,0.08); */
         transition: all 0.2s ease;
     }
 
     div[data-testid="stMetric"]:hover {
-        transform: translateY(-4px) scale(1.02);
+        transform: translateY(-2px) scale(1.02);
+        border: 2px solid #3D4044;
         box-shadow: 0 8px 25px rgba(0,0,0,0.15);
     }
 
@@ -446,19 +492,18 @@ with bottom:
                 closing_reason_text = closing_reason_map.get(float(closing_reason_value), "Unbekannt")
             
 
-            col1, col2, col3 ,col4, col5= st.columns(5)
+            col1, col2, col3 ,col4, col5, col6 = st.columns(6)
 
             # Display metrics with proper formatting
             with col1:
-                st.metric("Status", closing_reason_text)
-            
-            with col2:
-                gewinn_value = selected_row_data['gewinn']
-                st.metric("Gewinn", f"€ {gewinn_value:,.2f}".replace(",", " "))
-            with col3:
                 starting_date = selected_row_data['starting_date']
                 st.metric("Start", f"{starting_date}")
-            with col4:
+
+            with col2:
+                starting_investment = round(selected_row_data['starting_investment'], 2)
+                st.metric("Start-Wert", f"€ {starting_investment}")
+
+            with col3:
                 if selected_row_data['active']:
                     current_value = selected_row_data['current_value']
                     st.metric("Aktueller Wert", f"€ {current_value:,.2f}".replace(",", " "))
@@ -466,6 +511,17 @@ with bottom:
                 elif not selected_row_data['active']:
                     closing_date = selected_row_data['closing_date']
                     st.metric("Ende", f" {closing_date}")
+
+            with col4:
+                st.metric("Status", closing_reason_text)
+
+            with col5:
+                gewinn_value = selected_row_data['gewinn']
+                st.metric("Gewinn", f"€ {gewinn_value:,.2f}".replace(",", " "))
+
+            with col6:
+                indiv_rendite  = round( ((gewinn_value / starting_investment if starting_investment != 0 else 0)*100), 2)   
+                st.metric("Rendite", f"{indiv_rendite} %")
                 
         else:
             st.info("Wähle ein Investment aus der Tabelle")
