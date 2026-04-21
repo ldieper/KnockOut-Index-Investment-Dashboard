@@ -206,7 +206,7 @@ def filter_nearest_barriers(df_plot, top_n=2):
 
 
 @st.cache_data
-def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_index="GDAXI", debug_hebels=3
+def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_index="GDAXI", debug_hebels=3
     index_map = get_index_map()
 
     if debug_index:
