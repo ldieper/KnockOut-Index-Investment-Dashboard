@@ -206,7 +206,7 @@ def filter_nearest_barriers(df_plot, top_n=2):
 
 
 @st.cache_data
-def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_index="GDAXI", debug_hebels=3
+def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_index="GDAXI", debug_hebels=3
     index_map = get_index_map()
 
     if debug_index:
@@ -272,7 +272,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
 
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
-    with st.spinner("Precomputing.. Das dauert bis zu 30 Sekunden. Ein guter Moment um etwas Kaffe zu trinken. ☕"):
+    with st.spinner("Precomputing.. Das dauert bis zu 1:30 Minuten. Ein guter Moment, um etwas Kaffe zu trinken. ☕"):
         # DEBUG: Ändere hier für schnelleres Debuggen
         st.session_state.all_results = precompute_all_simulations() #Debug: debug_index="DAX", debug_hebels=[3]
         st.session_state.simulations_loaded = True
@@ -392,12 +392,12 @@ with mid:
                 st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "), "Test")
 
             with col2:
-                st.metric("Gewinn", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "), "Test")
-                st.metric("Verkäufe (Hebel < 1.5x)", f"{metrics['sells_count']}", "Test")
+                st.metric("Gewinn", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "), " ")
+                st.metric("Verkäufe (Hebel < 1.5x)", f"{metrics['sells_count']}", f"{round(metrics['sells_count'] / metrics['trades_count'] if not 0 else 1, 2 )} %" )
 
             with col3:
-                st.metric("Verluste", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "), "Test")
-                st.metric("KnockOut", f"{metrics['knockouts_count']}", "Test")
+                st.metric("Verluste", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "), metrics['loss_sum'], delta_color="inverse")
+                st.metric("KnockOut", f"{metrics['knockouts_count']}", f"{round(metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1, 2 )} %", delta_color="inverse")
 
             with col4:
                 st.metric("Rendite", f"{metrics['total_rendite']} %", "Test")
