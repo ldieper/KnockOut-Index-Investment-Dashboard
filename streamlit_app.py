@@ -349,9 +349,7 @@ with top:
     )
 
     st.altair_chart(combined_chart, width="stretch")
-
-    st.write(f"Legende:")
-
+    
 
 with mid:
 
