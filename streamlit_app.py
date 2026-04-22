@@ -387,25 +387,25 @@ with mid:
             col1, col2, col3, col4, col5 = st.columns(5)
 
             with col1:
-                st.metric("Investment-Kurs", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "), "Test")
+                st.metric("Investment-Kurs", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "))
                 current_index_wert = float(df_all_index["index_wert"].iloc[-1])
-                st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "), "Test")
+                st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "))
 
             with col2:
-                st.metric("Gewinn", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "), " ")
-                st.metric("Verkäufe (Hebel < 1.5x)", f"{metrics['sells_count']}", f"{round(metrics['sells_count'] / metrics['trades_count'] if not 0 else 1, 2 )} %" )
+                st.metric("Gewinn", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "))
+                st.metric("Verkäufe (Hebel < 1.5x)", f"{metrics['sells_count']}", f"{round( (metrics['sells_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_arrow="off")
 
             with col3:
-                st.metric("Verluste", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "), metrics['loss_sum'], delta_color="inverse")
-                st.metric("KnockOut", f"{metrics['knockouts_count']}", f"{round(metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1, 2 )} %", delta_color="inverse")
+                st.metric("Verluste", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "))
+                st.metric("KnockOut", f"{metrics['knockouts_count']}", f"{round( (metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_color="inverse", delta_arrow="off")
 
             with col4:
-                st.metric("Rendite", f"{metrics['total_rendite']} %", "Test")
-                st.metric("Anzahl aktiver Investments", f"{metrics['active_trades']}", "Test")
+                st.metric("Rendite", f"{metrics['total_rendite']} %", )
+                st.metric("Anzahl aktiver Investments", f"{metrics['active_trades']}", f"{round( (metrics['active_trades'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total" , delta_arrow="off")
 
             with col5:
-                st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "), "Test")
-                st.metric("Monatliches Budget", f"€ 500,00", "Test")
+                st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "))
+                st.metric("Monatliches Budget", f"€ 500,00")
                 #st.metric("Anzahl nicht ausgeführter Investments (zu wenig Budget)", f"{metrics['not_enough_money_count']}", "Test")
 
     with mid_right:
