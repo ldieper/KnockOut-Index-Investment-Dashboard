@@ -8,7 +8,7 @@ st.set_page_config(layout="wide")
 
 st.title("KnockOut-Investition auf Indizes")
 
-#Extrahiert die .json aus yfinance_indizes
+#Extracts the index name and file path from the "yfinance_indizes" folder, returns a dictionary mapping index names to file paths
 def get_index_map(folder="yfinance_indizes"):
     index_map = {}
     
@@ -16,7 +16,6 @@ def get_index_map(folder="yfinance_indizes"):
         # Use filename (without extension) as default name
         name = file.stem
         
-        # Optional: make names prettier
         name = name.replace("^", "")  # remove ^ if present
         
         index_map[name] = str(file)
@@ -52,19 +51,18 @@ def load_df(file_path):
 def prepare_investment_data(df_all_index):
     df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
     
-    # Only create columns that are actually used (avoid unnecessary memory)
     df_all_index["index_investpoint"] = None
 
     df_all_index["yearly_high"] = (
         df_all_index["index_wert"]
-            .rolling(window=252, min_periods=1)  # ~252 Handelstage = 1 Jahr
+            .rolling(window=252, min_periods=1)  # ~252 Trading Days = 1 Year
             .max()
     )
 
-    start_date = df_all_index["date"].iloc[0] + pd.DateOffset(years=1)
+    start_date = df_all_index["date"].iloc[0] + pd.DateOffset(years=1) #Starts one year in, so the 52-week high can be used as reference point
     mask = df_all_index["date"] > start_date
 
-    # Invest_Points setzen
+    # Adding investmentpoints 
     for i in df_all_index[mask].index:
         price = df_all_index.loc[i, "index_wert"]
         high = df_all_index.loc[i, "yearly_high"]
@@ -81,7 +79,7 @@ def prepare_investment_data(df_all_index):
 
     return df_all_index, mask
 
-# Kennzahlen berechnen (Funktion)
+# Calcuating metrics of the final Investments
 def calculate_metrics(df_investment):
     final_trades = df_investment.groupby("inv_id").last()
 
@@ -117,11 +115,12 @@ def calculate_metrics(df_investment):
     }
 
 
+# Function for creating plot of individual investments
 def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     if inv_id is None:
         return None
     
-    # Filter to only this investment (lightweight)
+    # Filter to only this investment
     df_inv = df_investment[df_investment["inv_id"] == inv_id][["date", "current_value", "hebel", "knockout_barrier"]].copy()
     
     if df_inv.empty:
@@ -153,7 +152,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
     
-    # LEFT AXIS: Index value and Knockout barrier (share same realistic scale)
+    # LEFT AXIS: Index value and Knockout barrier
     line_index = base.transform_calculate(
         lines="'Index'"
         ).mark_line(size=2).encode(
@@ -168,7 +167,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
             color=color
     )
     
-    # RIGHT AXIS: Investment value (its own independent scale)
+    # RIGHT AXIS: Investment value (independent scale)
     line_investment = base.transform_calculate(
         lines="'Investment'"
         ).mark_line(size=2.5).encode(
@@ -176,7 +175,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
             color=color
     )
     
-    # Layer: index and barrier on left, investment on right with independent scales
+
     left_chart = alt.layer(line_index, line_barrier)
     
     chart = alt.layer(left_chart, line_investment).resolve_scale(
@@ -193,20 +192,19 @@ def filter_nearest_barriers(df_plot, top_n=2):
     if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
         return df_plot
     
-    # Calculate absolute distance from index to barrier (avoid copy - use boolean mask)
+    # Calculate absolute distance from index to barrier
     abs_dist = (df_plot["index_wert"] - df_plot["knockout_barrier"]).abs()
     
-    # Rank by distance within each date group, keep only top N
+    # Rank by distance within each date group, keep only top N (defaut = 2)
     rank = df_plot.groupby("date").cumcount()
     df_plot_temp = df_plot.assign(abs_dist=abs_dist, rank=rank)
     df_plot_temp["rank"] = df_plot_temp.groupby("date")["abs_dist"].rank(method="first")
     
-    # Filter using boolean mask (no .copy() needed)
     return df_plot_temp[df_plot_temp["rank"] <= top_n].drop(columns=["abs_dist", "rank"])
 
 
 @st.cache_data
-def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_index="GDAXI", debug_hebels=3
+def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_index="GDAXI", debug_hebels=3
     index_map = get_index_map()
 
     if debug_index:
@@ -231,13 +229,12 @@ def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_inde
                 remaining_budget  
             )
 
-            # Kennzahlen berechnen
+            # Calculate metrics
             metrics = calculate_metrics(df_investment)
 
-            # Plotten - filter investment data and use INNER join (much faster than LEFT)
-            # Only keep rows where we have investment data
             df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
             
+            #left join with df_all_index on mathing dates
             df_plot = pd.merge(
                 df_all_index,
                 df_investment_plot,
@@ -245,8 +242,6 @@ def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_inde
                 how="left"
             )
             
-            # Pre-compute table data to avoid recalculation on every render
-            # Filter and select only needed columns early to reduce memory
             df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "gewinn", "current_value", "starting_investment"]].copy()
             df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
             df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
@@ -273,15 +268,16 @@ def precompute_all_simulations(debug_index="GDAXI", debug_hebels=3): #debug_inde
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
     with st.spinner("Precomputing.. Das dauert bis zu 1:30 Minuten. Ein guter Moment, um etwas Kaffe zu trinken. ☕"):
-        # DEBUG: Ändere hier für schnelleres Debuggen
+        
         st.session_state.all_results = precompute_all_simulations() #Debug: debug_index="DAX", debug_hebels=[3]
         st.session_state.simulations_loaded = True
     st.rerun()
 
 
-#Abspeichern der berechneten und aktuellen Daten
+#Storing calculations in current
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_hebel)]
 
+#assigning current to variables
 df_all_index = current["df_all_index"]
 df_investment = current["df_investment"]
 df_plot = current["df_plot"]
@@ -298,7 +294,6 @@ bottom = st.container(border=True)
 with top:
     st.subheader(f"Kursverlauf - {st.session_state.selected_index}")
 
-    # Use pre-filtered barriers (no .copy() needed)
     df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
 
     legend = alt.Legend(
@@ -439,7 +434,6 @@ with bottom:
 
     bottom_left, bottom_right = st.columns([0.12, 0.88])
 
-    # Use pre-computed table data (already filtered, formatted, and sorted)
     df_filtered = current["df_table"]
 
     with bottom_left:
@@ -465,7 +459,7 @@ with bottom:
         if event.selection.rows:
             selected_row = event.selection.rows[0]
         else:
-            selected_row = 0 if len(df_filtered) > 0 else None  # Default: erste Zeile
+            selected_row = 0 if len(df_filtered) > 0 else None  # Default: 1st row
 
     
     with bottom_right:
@@ -479,7 +473,6 @@ with bottom:
             if detail_chart:
                 st.altair_chart(detail_chart, width="stretch")
             
-            # Get the actual row data
             selected_row_data = df_filtered.iloc[selected_row]
             
             # Map closing reason to readable text
@@ -492,7 +485,7 @@ with bottom:
 
             col1, col2, col3 ,col4, col5, col6 = st.columns(6)
 
-            # Display metrics with proper formatting
+            # Displaying metrics (formatted)
             with col1:
                 starting_date = selected_row_data['starting_date']
                 st.metric("Start", f"{starting_date}")

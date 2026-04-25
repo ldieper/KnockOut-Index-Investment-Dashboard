@@ -13,7 +13,7 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
 
         from pathlib import Path
 
-        # Erstellt den Ordner, falls er nicht existiert
+        # If no directory exists, create it
         Path("yfinance_indizes").mkdir(parents=True, exist_ok=True)
 
         df.index = df.index.strftime('%Y-%m-%d')

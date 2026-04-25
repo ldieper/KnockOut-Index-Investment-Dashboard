@@ -5,9 +5,9 @@ from numpy import floor
 class Investment:
     
     def __init__(self, index_values, index_growth, dates, i, selected_hebel, selected_budget, remaining_budget, inv_id):
-        self.index_values = index_values  # numpy array 
-        self.index_growth = index_growth  # numpy array 
-        self.dates = dates  # numpy array
+        self.index_values = index_values  
+        self.index_growth = index_growth  
+        self.dates = dates 
         
         self.i = i
         self.id = inv_id
