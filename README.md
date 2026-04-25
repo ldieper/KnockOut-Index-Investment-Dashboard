@@ -75,7 +75,7 @@ You can now continue with running the main app.
 streamlit run app.py
 ```
 
-##Additional resources
+## Additional resources
 
 [Streamlit documentation](https://docs.streamlit.io/) <br>
 [Yfinance documentation](https://ranaroussi.github.io/yfinance/)
