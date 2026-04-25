@@ -23,8 +23,8 @@ The main features of the dashboard are:
 
 - [x] Logic for variable index-imports (IndexName.json instead of hard values)
 - [x] Dynamic streamlit-radio for choosing between variable index-imports
-- [ ] Logic for comparison of Investment-strategy and "typical" World ETF investment
-- [ ] Dynamic UI
+- [ ] Logic for comparison of Investment-strategy and other "typical" investment (preparation for bachelor-thesis)
+- [x] Dynamic UI
 - [x] Legend for plots
 
 ## The investment strategy in detail
@@ -59,6 +59,21 @@ This typically reflects a recovery phase where the leveraged exposure diminishes
 
 Realized profits are not reinvested into future positions.
 Only the ongoing monthly contributions (€500) are used to fund new investments.
+
+## Installation and Dependencies
+
+```
+python -m venv .venv
+source .venv/bin/activate
+pip install streamlit yfinance
+```
+
+After setting up the virtual environment run `yfinance_loader.py` and `investment.py` once.
+You can now continue with running the main app.
+
+```
+streamlit run app.py
+```
 
 ## Dashboard
 
