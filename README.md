@@ -72,7 +72,7 @@ After setting up the virtual environment run `yfinance_loader.py` and `investmen
 You can now continue with running the main app.
 
 ```
-streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
 ## Additional resources
