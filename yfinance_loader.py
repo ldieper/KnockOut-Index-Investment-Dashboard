@@ -2,7 +2,8 @@ from pathlib import Path
 import yfinance as yf
 
 
-def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
+# Loads the past 20years of the chosen products and saves them once. (update for newer data must be done manually!)
+def download(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S&P500, ^HSI = Hang Seng Index; e.g. ^NDX = Nasdaq100, STOXX50E = EuroStoxx50 etc.
     for ticker in tickers:
         df = yf.download(
             ticker,
@@ -10,8 +11,6 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]):
             interval="1d",
             auto_adjust=True
         )
-
-        from pathlib import Path
 
         # If no directory exists, create it
         Path("yfinance_indizes").mkdir(parents=True, exist_ok=True)
