@@ -21,11 +21,10 @@ The main features of the dashboard are:
 
 ## Planned features
 
-- [x] Logic for variable index-imports (IndexName.json instead of hard values)
-- [x] Dynamic streamlit-radio for choosing between variable index-imports
+- [ ] Datenbank (local json DB (influx per docker oder so))
+- [ ] Flow-chart der prozesse
+- [ ] Bug mit budget
 - [ ] Logic for comparison of Investment-strategy and other "typical" investment (preparation for bachelor-thesis)
-- [x] Dynamic UI
-- [x] Legend for plots
 
 ## The investment strategy in detail
 

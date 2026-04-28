@@ -48,6 +48,9 @@ class Investment:
         self.starting_investment = self.investment_value
 
 
+
+
+
     def reset_investment(self, type):
         self.active = False
         self.investment_value = None
