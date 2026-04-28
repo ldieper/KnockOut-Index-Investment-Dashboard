@@ -6,7 +6,7 @@ from investment_simulation import run_simulation
 
 st.set_page_config(layout="wide")
 
-st.title("KnockOut-Investition auf Indizes")
+st.title("KnockOut-Investments on indices")
 
 #Extracts the index name and file path from the "yfinance_indizes" folder, returns a dictionary mapping index names to file paths
 def get_index_map(folder="yfinance_indizes"):
@@ -267,7 +267,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
 
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
-    with st.spinner("Precomputing.. Das dauert bis zu 1:30 Minuten. Ein guter Moment, um etwas Kaffe zu trinken. ☕"):
+    with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
         
         st.session_state.all_results = precompute_all_simulations() #Debug: debug_index="DAX", debug_hebels=[3]
         st.session_state.simulations_loaded = True
@@ -292,7 +292,7 @@ mid = st.container(border=True)
 bottom = st.container(border=True)
 
 with top:
-    st.subheader(f"Kursverlauf - {st.session_state.selected_index}")
+    st.subheader(f"Index performance - {st.session_state.selected_index}")
 
     df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
 
@@ -377,36 +377,36 @@ with mid:
 
         with st.container(border=True):
 
-            st.subheader("Aktuelle Kennzahlen")
+            st.subheader("Current metrics")
 
             col1, col2, col3, col4, col5 = st.columns(5)
 
             with col1:
-                st.metric("Investment-Kurs", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "))
+                st.metric("Investment-Level", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "))
                 current_index_wert = float(df_all_index["index_wert"].iloc[-1])
-                st.metric("Index-Kurs", f"{current_index_wert:,.3f}".replace(",", " "))
+                st.metric("Index-Level", f"{current_index_wert:,.3f}".replace(",", " "))
 
             with col2:
-                st.metric("Gewinn", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "))
-                st.metric("Verkäufe (Hebel < 1.5x)", f"{metrics['sells_count']}", f"{round( (metrics['sells_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_arrow="off")
+                st.metric("Profit", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "))
+                st.metric("Sells (Leverage < 1.5x)", f"{metrics['sells_count']}", f"{round( (metrics['sells_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_arrow="off")
 
             with col3:
-                st.metric("Verluste", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "))
-                st.metric("KnockOut", f"{metrics['knockouts_count']}", f"{round( (metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_color="inverse", delta_arrow="off")
+                st.metric("Losses", f"€ {metrics['loss_sum']:,.2f}".replace(",", " "))
+                st.metric("KnockOuts", f"{metrics['knockouts_count']}", f"{round( (metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_color="inverse", delta_arrow="off")
 
             with col4:
-                st.metric("Rendite", f"{metrics['total_rendite']} %", )
-                st.metric("Anzahl aktiver Investments", f"{metrics['active_trades']}", f"{round( (metrics['active_trades'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total" , delta_arrow="off")
+                st.metric("ROI", f"{metrics['total_rendite']} %", )
+                st.metric("Active investments", f"{metrics['active_trades']}", f"{round( (metrics['active_trades'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total" , delta_arrow="off")
 
             with col5:
-                st.metric("Verfügbares Budget", f"€ {remaining_budget:,.2f}".replace(",", " "))
-                st.metric("Monatliches Budget", f"€ 500,00")
+                st.metric("Accessible budget", f"€ {remaining_budget:,.2f}".replace(",", " "))
+                st.metric("Monthly budget", f"€ 500,00")
                 #st.metric("Anzahl nicht ausgeführter Investments (zu wenig Budget)", f"{metrics['not_enough_money_count']}", "Test")
 
     with mid_right:
         with st.container(border=True):
 
-            st.subheader("Einstellungen")
+            st.subheader("Settings")
 
             col1, col2 = st.columns(2)
 
@@ -421,7 +421,7 @@ with mid:
 
             with col2:
                 st.radio(
-                    "Hebel",
+                    "Leverage",
                     [3, 5, 10],
                     key="selected_hebel"
                 )
@@ -437,9 +437,9 @@ with bottom:
     df_filtered = current["df_table"]
 
     with bottom_left:
-        st.subheader("Investitionen")
+        st.subheader("Investments")
 
-        closing_reason_map = {0.0: "KnockOut", 1.0: "Verkauf", 2.0: "Keine Mittel", None: "Aktiv"}
+        closing_reason_map = {0.0: "KnockOut", 1.0: "Sold", 2.0: "No Money", None: "Active"}
         
         # Add mapped closing_reason column to display
         df_display = df_filtered.copy()
@@ -463,7 +463,7 @@ with bottom:
 
     
     with bottom_right:
-        st.subheader("Details zum Investment")
+        st.subheader("Detailed view of Investments")
 
         if selected_row is not None and selected_row < len(df_filtered):
             selected_inv_id = df_filtered.iloc[selected_row]['inv_id']
@@ -478,9 +478,9 @@ with bottom:
             # Map closing reason to readable text
             closing_reason_value = selected_row_data['closing_reason']
             if closing_reason_value is None or pd.isna(closing_reason_value):
-                closing_reason_text = "Aktiv"
+                closing_reason_text = "Active"
             else:
-                closing_reason_text = closing_reason_map.get(float(closing_reason_value), "Unbekannt")
+                closing_reason_text = closing_reason_map.get(float(closing_reason_value), "Unknown")
             
 
             col1, col2, col3 ,col4, col5, col6 = st.columns(6)
@@ -492,30 +492,30 @@ with bottom:
 
             with col2:
                 starting_investment = round(selected_row_data['starting_investment'], 2)
-                st.metric("Start-Wert", f"€ {starting_investment}")
+                st.metric("Start-Value", f"€ {starting_investment}")
 
             with col3:
                 if selected_row_data['active']:
                     current_value = selected_row_data['current_value']
-                    st.metric("Aktueller Wert", f"€ {current_value:,.2f}".replace(",", " "))
+                    st.metric("Current Value", f"€ {current_value:,.2f}".replace(",", " "))
 
                 elif not selected_row_data['active']:
                     closing_date = selected_row_data['closing_date']
-                    st.metric("Ende", f" {closing_date}")
+                    st.metric("End", f" {closing_date}")
 
             with col4:
                 st.metric("Status", closing_reason_text)
 
             with col5:
                 gewinn_value = selected_row_data['gewinn']
-                st.metric("Gewinn", f"€ {gewinn_value:,.2f}".replace(",", " "))
+                st.metric("Profit", f"€ {gewinn_value:,.2f}".replace(",", " "))
 
             with col6:
                 indiv_rendite  = round( ((gewinn_value / starting_investment if starting_investment != 0 else 0)*100), 2)   
-                st.metric("Rendite", f"{indiv_rendite} %")
+                st.metric("ROI", f"{indiv_rendite} %")
                 
         else:
-            st.info("Wähle ein Investment aus der Tabelle")
+            st.info("Choose an investment from the table")
 
 
 
