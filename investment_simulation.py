@@ -31,6 +31,7 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
         if i % 20 == 0:
             remaining_budget += selected_budget
 
+
         if df.loc[i, "index_investpoint"]:
             
             investment_count += 1

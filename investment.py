@@ -34,8 +34,8 @@ class Investment:
         abstand = self.index_values[self.i] - self.get_current_knockout_barrier()
         price_of_option = abstand * 0.01
 
-        max_accessible_budget = self.selected_budget * 1
-        actual_invested_budget = min(max_accessible_budget, self.remaining_budget)
+        #max_accessible_budget = self.remaining_budget * 0.8 | For further controlling of budgeting
+        actual_invested_budget = self.remaining_budget
 
         if actual_invested_budget < price_of_option:
             self.reset_investment(type="not_enough_money")

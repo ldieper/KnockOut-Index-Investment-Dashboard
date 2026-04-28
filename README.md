@@ -23,7 +23,7 @@ The main features of the dashboard are:
 
 - [ ] Datenbank (local json DB (influx per docker oder so))
 - [ ] Flow-chart der prozesse
-- [ ] Bug mit budget
+- [x] Bug mit budget
 
 ## The investment strategy in detail
 
@@ -60,7 +60,7 @@ Only the ongoing monthly contributions (€500) are used to fund new investments
 
 ## Installation and Dependencies
 
-```
+```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install streamlit yfinance
@@ -69,7 +69,7 @@ pip install streamlit yfinance
 After setting up the virtual environment run `yfinance_loader.py` and `investment.py` once.
 You can now continue with running the main app.
 
-```
+```bash
 streamlit run streamlit_app.py
 ```
 
