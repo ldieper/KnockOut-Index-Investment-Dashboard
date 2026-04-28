@@ -24,7 +24,6 @@ The main features of the dashboard are:
 - [ ] Datenbank (local json DB (influx per docker oder so))
 - [ ] Flow-chart der prozesse
 - [ ] Bug mit budget
-- [ ] Logic for comparison of Investment-strategy and other "typical" investment (preparation for bachelor-thesis)
 
 ## The investment strategy in detail
 
