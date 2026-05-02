@@ -7,8 +7,10 @@ The application is written in Python and currently supports simulations on DAX, 
 ## Technology
 
 - `streamlit`
+- `duckdb`
 - `python`
 - `yfinance`
+
 
 ## Key features include
 
@@ -21,9 +23,9 @@ The main features of the dashboard are:
 
 ## Planned features
 
-- [ ] Datenbank (local json DB (influx per docker oder so))
-- [ ] Flow-chart der prozesse
-- [x] Bug mit budget
+- [x] Persistent DB
+- [ ] Flow-chart of process
+- [x] Budget Bug
 
 ## The investment strategy in detail
 
@@ -60,10 +62,20 @@ Only the ongoing monthly contributions (€500) are used to fund new investments
 
 ## Installation and Dependencies
 
+### Windows
+
+```bash
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install streamlit pandas altair yfinance duckdb
+```
+
+### Linux / Mac
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install streamlit yfinance
+pip install streamlit pandas altair yfinance duckdb
 ```
 
 After setting up the virtual environment run `yfinance_loader.py` and `investment.py` once.
