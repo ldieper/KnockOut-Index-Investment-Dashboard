@@ -11,7 +11,6 @@ The application is written in Python and currently supports simulations on DAX, 
 - `python`
 - `yfinance`
 
-
 ## Key features include
 
 The main features of the dashboard are:
