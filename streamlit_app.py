@@ -3,6 +3,8 @@ import pandas as pd
 import altair as alt
 from pathlib import Path
 from investment_simulation import run_simulation
+import duckdb
+import pickle # Any to bytes
 
 st.set_page_config(layout="wide")
 
@@ -114,6 +116,64 @@ def calculate_metrics(df_investment):
         "total_rendite": total_rendite,
     }
 
+
+def load_from_db():
+    try:
+        con = duckdb.connect('simulations.db')
+        # Check if table exists
+        if not con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='simulations'").fetchone():
+            con.close()
+            return None
+        
+        # Load data
+        df = con.execute("SELECT * FROM simulations").fetchdf()
+        results = {}
+        for _, row in df.iterrows(): #"_" because index like 0,1,2,3 is not needed (trying some new mechanics)
+            key = (row['index_name'], row['hebel'])
+            results[key] = {
+                'df_all_index': pickle.loads(row['df_all_index_pickle']),
+                'df_investment': pickle.loads(row['df_investment_pickle']),
+                'df_plot': pickle.loads(row['df_plot_pickle']),
+                'df_table': pickle.loads(row['df_table_pickle']),
+                'remaining_budget': row['remaining_budget'],
+                'cumulative_value': row['cumulative_value'],
+                'metrics': pickle.loads(row['metrics_pickle'])
+            }
+        
+        # Check if all combinations exist
+        index_map = get_index_map()
+        expected_keys = {(index_name, hebel) for index_name in index_map.keys() for hebel in [3, 5, 10]}
+        if set(results.keys()) != expected_keys:
+            con.close()
+            return None
+        
+        con.close()
+        return results
+    
+    except Exception as error_message:
+        print(f"Error loading from DB: {error_message}")
+        return None
+
+
+def store_to_db(results):
+    con = duckdb.connect('simulations.db')
+    con.execute("DROP TABLE IF EXISTS simulations")
+    con.execute("CREATE TABLE simulations (index_name VARCHAR, hebel INTEGER, df_all_index_pickle BLOB, df_investment_pickle BLOB, df_plot_pickle BLOB, df_table_pickle BLOB, remaining_budget DOUBLE, cumulative_value DOUBLE, metrics_pickle BLOB)")
+    for key, value in results.items():
+        index_name, hebel = key
+        con.execute("INSERT INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+            index_name,
+            hebel,
+            pickle.dumps(value['df_all_index']),
+            pickle.dumps(value['df_investment']),
+            pickle.dumps(value['df_plot']),
+            pickle.dumps(value['df_table']),
+            value['remaining_budget'],
+            value['cumulative_value'],
+            pickle.dumps(value['metrics'])
+        ])
+    con.close()
+    
 
 # Function for creating plot of individual investments
 def create_investment_detail_plot(df_investment, df_all_index, inv_id):
@@ -267,10 +327,12 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
 
 #"Loading Screen"
 if not st.session_state.simulations_loaded:
-    with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
-        
-        st.session_state.all_results = precompute_all_simulations() #Debug: debug_index="DAX", debug_hebels=[3]
-        st.session_state.simulations_loaded = True
+    st.session_state.all_results = load_from_db()
+    if st.session_state.all_results is None:
+        with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
+            st.session_state.all_results = precompute_all_simulations()
+            store_to_db(st.session_state.all_results)
+    st.session_state.simulations_loaded = True
     st.rerun()
 
 
