@@ -6,6 +6,7 @@ from investment_simulation import run_simulation
 from yfinance_loader import download
 import duckdb
 import pickle # Any to bytes
+import os
 
 st.set_page_config(layout="wide")
 
@@ -14,6 +15,10 @@ st.title("KnockOut-Investments on indices")
 #Extracts the index name and file path from the "index_data" folder, returns a dictionary mapping index names to file paths
 def get_index_map(folder="index_data"):
     index_map = {}
+
+    if not any(Path(folder).glob("*.json")):
+        print(f"No JSON files found in {folder}, downloading data...")
+        download()
     
     for file in Path(folder).glob("*.json"):
         # Use filename (without extension) as default name
@@ -25,32 +30,21 @@ def get_index_map(folder="index_data"):
     
     return index_map
 
-
-#Init
-index_map = get_index_map()
-
-if "selected_index" not in st.session_state:
-    st.session_state.selected_index = list(index_map.keys())[0]
-
-if "selected_leverage" not in st.session_state:
-    st.session_state.selected_leverage = 3
-
-if "simulations_loaded" not in st.session_state:
-    st.session_state.simulations_loaded = False
-
-if "all_results" not in st.session_state:
-    st.session_state.all_results = None
-
-
-#Funktionen
 #@st.cache_data
 def load_df(file_path):
-    df = pd.read_json(file_path, orient="index")
-    df.index = pd.to_datetime(df.index)
-    df.columns = ["index_value"]
-    df.index.name = "date"
-    return df.reset_index()
 
+    try:
+        df = pd.read_json(file_path, orient="index")
+        df.index = pd.to_datetime(df.index)
+        df.columns = ["index_value"]
+        df.index.name = "date"
+        return df.reset_index()
+
+    except Exception as error_message:
+        print(f"Error loading JSON: {error_message}")
+        return None
+
+#Funktionen
 def prepare_investment_data(df_all_index):
     df_all_index["index_growth"] = df_all_index["index_value"].pct_change().fillna(0)
     
@@ -334,18 +328,41 @@ def precompute_all_simulations(debug_index=None, debug_leverages=None): #debug_i
 #st.button("Load historic data")
 
 
+#Init
+index_map = get_index_map()
 
-if not st.session_state.simulations_loaded:
-    st.session_state.all_results = load_from_db()
-    if st.session_state.all_results is None:
-        with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
-            st.session_state.all_results = precompute_all_simulations()
-            store_to_db(st.session_state.all_results)
-    st.session_state.simulations_loaded = True
-    st.rerun()
+if "selected_index" not in st.session_state:
+    if index_map:
+        st.session_state.selected_index = list(index_map.keys())[0]
+    else:
+        st.session_state.selected_index = None  # or handle appropriately
+
+if "selected_leverage" not in st.session_state:
+    st.session_state.selected_leverage = 3
+
+if "simulations_loaded" not in st.session_state:
+    st.session_state.simulations_loaded = False
+
+if "all_results" not in st.session_state:
+    st.session_state.all_results = None
+
+# Rest of the app code only runs if selected_index is not None
+if st.session_state.selected_index is not None:
+    if not st.session_state.simulations_loaded:
+        st.session_state.all_results = load_from_db()
+        if st.session_state.all_results is None:
+            with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
+                st.session_state.all_results = precompute_all_simulations()
+                store_to_db(st.session_state.all_results)
+        st.session_state.simulations_loaded = True
+        st.rerun()
 
 
 #Storing calculations in current
+if st.session_state.selected_index is None or st.session_state.all_results is None:
+    st.error("Data not loaded properly. Selected index or results are missing.")
+    st.stop()
+
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
 
 #assigning current to variables
