@@ -23,7 +23,7 @@ The main features of the dashboard are:
 ## Planned features
 
 - [x] Persistent DB
-- [ ] Flow-chart of process
+- [x] Flow-chart of process
 - [x] Budget Bug
 
 ## The investment strategy in detail
