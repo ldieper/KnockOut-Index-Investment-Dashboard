@@ -12,12 +12,12 @@ def get_cumulative_investment_value(investments_list):
     return total_value
 
 
-@st.cache_data
-def run_simulation(source, filter, selected_hebel, selected_budget, remaining_budget):
+#@st.cache_data
+def run_simulation(source, filter, selected_leverage, selected_budget, remaining_budget):
     df = source.copy()
     
-    # Convert to numpy arrays for fast access (MAJOR PERFORMANCE IMPROVEMENT)
-    index_values = df["index_wert"].values
+    # Convert to numpy arrays
+    index_values = df["index_value"].values
     index_growth = df["index_growth"].values
     dates = df["date"].values
 
@@ -41,7 +41,7 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 index_growth=index_growth,
                 dates=dates,
                 i=i,
-                selected_hebel=selected_hebel,
+                selected_leverage=selected_leverage,
                 selected_budget=selected_budget,
                 remaining_budget=remaining_budget,
                 inv_id=investment_count)
@@ -57,16 +57,16 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
 
             inv.update_current_knockout_barrier(i=i)
             inv.update_investment_value(i=i)
-            inv.update_hebel(i=i)
-            inv.update_gewinn()
+            inv.update_leverage(i=i)
+            inv.update_profit()
 
-            if inv.get_hebel() == 0:
+            if inv.get_leverage() == 0:
                 inv.reset_investment(type="knockout")
                 closing_date = df.loc[i, "date"]
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
-                    "gewinn": inv.get_gewinn(),
+                    "profit": inv.get_profit(),
                     "closing_reason": inv.closing_reason,
                     "starting_investment": inv.starting_investment,
                     "active": inv.active,
@@ -81,7 +81,7 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
-                    "gewinn": inv.get_gewinn(),
+                    "profit": inv.get_profit(),
                     "closing_reason": inv.closing_reason,
                     "starting_investment": inv.starting_investment,
                     "active": inv.active,
@@ -90,13 +90,13 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 })
                 continue
 
-            if inv.get_hebel() <= 1.5:
+            if inv.get_leverage() <= 1.5:
                 inv.reset_investment(type="sell")
                 closing_date = df.loc[i, "date"]
                 rows.append({
                     "date": df["date"].loc[i],
                     "inv_id": inv.id,
-                    "gewinn": inv.get_gewinn(),
+                    "profit": inv.get_profit(),
                     "closing_reason": inv.closing_reason,
                     "starting_investment": inv.starting_investment,
                     "active": inv.active,
@@ -110,8 +110,8 @@ def run_simulation(source, filter, selected_hebel, selected_budget, remaining_bu
                 "inv_id": inv.id,
                 "knockout_barrier": inv.get_current_knockout_barrier(),
                 "current_value": inv.get_investment_value(),
-                "hebel": inv.get_hebel(),
-                "gewinn": inv.get_gewinn(),
+                "leverage": inv.get_leverage(),
+                "profit": inv.get_profit(),
                 "closing_reason": inv.closing_reason,
                 "starting_investment": inv.starting_investment,
                 "active": inv.active,

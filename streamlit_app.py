@@ -3,6 +3,7 @@ import pandas as pd
 import altair as alt
 from pathlib import Path
 from investment_simulation import run_simulation
+from yfinance_loader import download
 import duckdb
 import pickle # Any to bytes
 
@@ -10,8 +11,8 @@ st.set_page_config(layout="wide")
 
 st.title("KnockOut-Investments on indices")
 
-#Extracts the index name and file path from the "yfinance_indizes" folder, returns a dictionary mapping index names to file paths
-def get_index_map(folder="yfinance_indizes"):
+#Extracts the index name and file path from the "index_data" folder, returns a dictionary mapping index names to file paths
+def get_index_map(folder="index_data"):
     index_map = {}
     
     for file in Path(folder).glob("*.json"):
@@ -31,8 +32,8 @@ index_map = get_index_map()
 if "selected_index" not in st.session_state:
     st.session_state.selected_index = list(index_map.keys())[0]
 
-if "selected_hebel" not in st.session_state:
-    st.session_state.selected_hebel = 3
+if "selected_leverage" not in st.session_state:
+    st.session_state.selected_leverage = 3
 
 if "simulations_loaded" not in st.session_state:
     st.session_state.simulations_loaded = False
@@ -42,21 +43,21 @@ if "all_results" not in st.session_state:
 
 
 #Funktionen
-@st.cache_data
+#@st.cache_data
 def load_df(file_path):
     df = pd.read_json(file_path, orient="index")
     df.index = pd.to_datetime(df.index)
-    df.columns = ["index_wert"]
+    df.columns = ["index_value"]
     df.index.name = "date"
     return df.reset_index()
 
 def prepare_investment_data(df_all_index):
-    df_all_index["index_growth"] = df_all_index["index_wert"].pct_change().fillna(0)
+    df_all_index["index_growth"] = df_all_index["index_value"].pct_change().fillna(0)
     
     df_all_index["index_investpoint"] = None
 
     df_all_index["yearly_high"] = (
-        df_all_index["index_wert"]
+        df_all_index["index_value"]
             .rolling(window=252, min_periods=1)  # ~252 Trading Days = 1 Year
             .max()
     )
@@ -66,7 +67,7 @@ def prepare_investment_data(df_all_index):
 
     # Adding investmentpoints 
     for i in df_all_index[mask].index:
-        price = df_all_index.loc[i, "index_wert"]
+        price = df_all_index.loc[i, "index_value"]
         high = df_all_index.loc[i, "yearly_high"]
 
         if df_all_index["index_investpoint"].sum() == 0:
@@ -97,23 +98,23 @@ def calculate_metrics(df_investment):
     not_enough_money_count = (final_trades["closing_reason"] == 2).sum()
     active_trades = final_trades["active"].sum()
 
-    final_gewinn = round(final_trades["gewinn"].sum(), 2)
+    final_profit = round(final_trades["profit"].sum(), 2)
     loss_sum = round(final_trades.loc[final_trades["closing_reason"] == 0, "starting_investment"].sum(), 2)
     total_invested_sum = round(final_trades.loc[final_trades["closing_reason"] != 2, "starting_investment"].sum(), 2)
 
-    total_rendite = round(final_gewinn / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0
+    total_return = round(final_profit / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0
 
     return {
         "closed_trades": closed_trades,
         "sells_count": sells_count,
         "knockouts_count": knockouts_count,
         "not_enough_money_count": not_enough_money_count,
-        "final_gewinn": final_gewinn,
+        "final_profit": final_profit,
         "trades_count": trades_count,
         "active_trades": active_trades,
         "loss_sum": loss_sum,
         "total_invested_sum": total_invested_sum,
-        "total_rendite": total_rendite,
+        "total_return": total_return,
     }
 
 
@@ -129,7 +130,7 @@ def load_from_db():
         df = con.execute("SELECT * FROM simulations").fetchdf()
         results = {}
         for _, row in df.iterrows(): #"_" because index like 0,1,2,3 is not needed (trying some new mechanics)
-            key = (row['index_name'], row['hebel'])
+            key = (row['index_name'], row['leverage'])
             results[key] = {
                 'df_all_index': pickle.loads(row['df_all_index_pickle']),
                 'df_investment': pickle.loads(row['df_investment_pickle']),
@@ -142,7 +143,7 @@ def load_from_db():
         
         # Check if all combinations exist
         index_map = get_index_map()
-        expected_keys = {(index_name, hebel) for index_name in index_map.keys() for hebel in [3, 5, 10]}
+        expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
         if set(results.keys()) != expected_keys:
             con.close()
             return None
@@ -158,12 +159,12 @@ def load_from_db():
 def store_to_db(results):
     con = duckdb.connect('simulations.db')
     con.execute("DROP TABLE IF EXISTS simulations")
-    con.execute("CREATE TABLE simulations (index_name VARCHAR, hebel INTEGER, df_all_index_pickle BLOB, df_investment_pickle BLOB, df_plot_pickle BLOB, df_table_pickle BLOB, remaining_budget DOUBLE, cumulative_value DOUBLE, metrics_pickle BLOB)")
+    con.execute("CREATE TABLE simulations (index_name VARCHAR, leverage INTEGER, df_all_index_pickle BLOB, df_investment_pickle BLOB, df_plot_pickle BLOB, df_table_pickle BLOB, remaining_budget DOUBLE, cumulative_value DOUBLE, metrics_pickle BLOB)")
     for key, value in results.items():
-        index_name, hebel = key
+        index_name, leverage = key
         con.execute("INSERT INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
             index_name,
-            hebel,
+            leverage,
             pickle.dumps(value['df_all_index']),
             pickle.dumps(value['df_investment']),
             pickle.dumps(value['df_plot']),
@@ -173,7 +174,7 @@ def store_to_db(results):
             pickle.dumps(value['metrics'])
         ])
     con.close()
-    
+
 
 # Function for creating plot of individual investments
 def create_investment_detail_plot(df_investment, df_all_index, inv_id):
@@ -181,14 +182,14 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
         return None
     
     # Filter to only this investment
-    df_inv = df_investment[df_investment["inv_id"] == inv_id][["date", "current_value", "hebel", "knockout_barrier"]].copy()
+    df_inv = df_investment[df_investment["inv_id"] == inv_id][["date", "current_value", "leverage", "knockout_barrier"]].copy()
     
     if df_inv.empty:
         return None
     
     # Merge with index data for comparison
     df_plot_detail = pd.merge(
-        df_all_index[["date", "index_wert"]],
+        df_all_index[["date", "index_value"]],
         df_inv,
         on="date",
         how="inner"
@@ -216,7 +217,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     line_index = base.transform_calculate(
         lines="'Index'"
         ).mark_line(size=2).encode(
-            y=alt.Y("index_wert:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
+            y=alt.Y("index_value:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
             color=color
     )
     
@@ -253,7 +254,7 @@ def filter_nearest_barriers(df_plot, top_n=2):
         return df_plot
     
     # Calculate absolute distance from index to barrier
-    abs_dist = (df_plot["index_wert"] - df_plot["knockout_barrier"]).abs()
+    abs_dist = (df_plot["index_value"] - df_plot["knockout_barrier"]).abs()
     
     # Rank by distance within each date group, keep only top N (defaut = 2)
     rank = df_plot.groupby("date").cumcount()
@@ -263,14 +264,14 @@ def filter_nearest_barriers(df_plot, top_n=2):
     return df_plot_temp[df_plot_temp["rank"] <= top_n].drop(columns=["abs_dist", "rank"])
 
 
-@st.cache_data
-def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_index="GDAXI", debug_hebels=3
+#@st.cache_data
+def precompute_all_simulations(debug_index=None, debug_leverages=None): #debug_index="GDAXI", debug_leverages=3
     index_map = get_index_map()
 
     if debug_index:
         index_map = {debug_index: index_map[debug_index]}
 
-    hebels = [debug_hebels] if debug_hebels else [3, 5, 10]
+    leverages = [debug_leverages] if debug_leverages else [3, 5, 10]
     results = {}
 
     for index_name, file_path in index_map.items():
@@ -280,11 +281,11 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
         selected_budget = 500
         remaining_budget = selected_budget
 
-        for hebel in hebels:
+        for leverage in leverages:
             investments_list, remaining_budget, df_investment = run_simulation(
                 df_all_index,
                 mask,
-                hebel,
+                leverage,
                 selected_budget,
                 remaining_budget  
             )
@@ -292,7 +293,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
             # Calculate metrics
             metrics = calculate_metrics(df_investment)
 
-            df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "hebel", "gewinn", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
+            df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "leverage", "profit", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
             
             #left join with df_all_index on mathing dates
             df_plot = pd.merge(
@@ -302,7 +303,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
                 how="left"
             )
             
-            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "gewinn", "current_value", "starting_investment"]].copy()
+            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "profit", "current_value", "starting_investment"]].copy()
             df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
             df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
             df_table["closing_date"] = df_table["closing_date"].dt.strftime("%d.%m.%y")
@@ -311,7 +312,7 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
 
             cumulative_value = df_investment["cumulative_investment_value"].iloc[-1]
 
-            key = (index_name, hebel)
+            key = (index_name, leverage)
             results[key] = {
                 "df_all_index": df_all_index,
                 "df_investment": df_investment,
@@ -326,6 +327,14 @@ def precompute_all_simulations(debug_index=None, debug_hebels=None): #debug_inde
 
 
 #"Loading Screen"
+
+#st.button("Load new data")
+#download(tickers=["^GDAXI", "^GSPC", "^HSI"])
+
+#st.button("Load historic data")
+
+
+
 if not st.session_state.simulations_loaded:
     st.session_state.all_results = load_from_db()
     if st.session_state.all_results is None:
@@ -337,7 +346,7 @@ if not st.session_state.simulations_loaded:
 
 
 #Storing calculations in current
-current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_hebel)]
+current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
 
 #assigning current to variables
 df_all_index = current["df_all_index"]
@@ -370,7 +379,7 @@ with top:
 
     left_axis_group = alt.layer(
         base.transform_calculate(lines="'Index'").mark_line().encode(
-            y=alt.Y("index_wert:Q", title="Index & Barrier Level"),
+            y=alt.Y("index_value:Q", title="Index & Barrier Level"),
             color=alt.Color("lines:N", legend=legend,
                             scale=alt.Scale(domain=["Index", "Barrier", "Investment"],
                                             range=["#BA2BAC", "#c4265e", "#e2e22e"]))
@@ -445,11 +454,11 @@ with mid:
 
             with col1:
                 st.metric("Investment-Level", f"€ {round(cumulative_value, 2):,.2f}".replace(",", " "))
-                current_index_wert = float(df_all_index["index_wert"].iloc[-1])
-                st.metric("Index-Level", f"{current_index_wert:,.3f}".replace(",", " "))
+                current_index_value = float(df_all_index["index_value"].iloc[-1])
+                st.metric("Index-Level", f"{current_index_value:,.3f}".replace(",", " "))
 
             with col2:
-                st.metric("Profit", f"€ {metrics['final_gewinn']:,.2f}".replace(",", " "))
+                st.metric("Profit", f"€ {metrics['final_profit']:,.2f}".replace(",", " "))
                 st.metric("Sells (Leverage < 1.5x)", f"{metrics['sells_count']}", f"{round( (metrics['sells_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_arrow="off")
 
             with col3:
@@ -457,7 +466,7 @@ with mid:
                 st.metric("KnockOuts", f"{metrics['knockouts_count']}", f"{round( (metrics['knockouts_count'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total", delta_color="inverse", delta_arrow="off")
 
             with col4:
-                st.metric("ROI", f"{metrics['total_rendite']} %", )
+                st.metric("ROI", f"{metrics['total_return']} %", )
                 st.metric("Active investments", f"{metrics['active_trades']}", f"{round( (metrics['active_trades'] / metrics['trades_count'] if not 0 else 1) * 100, 2 )} % of total" , delta_arrow="off")
 
             with col5:
@@ -485,7 +494,7 @@ with mid:
                 st.radio(
                     "Leverage",
                     [3, 5, 10],
-                    key="selected_hebel"
+                    key="selected_leverage"
                 )
 
 
@@ -569,12 +578,12 @@ with bottom:
                 st.metric("Status", closing_reason_text)
 
             with col5:
-                gewinn_value = selected_row_data['gewinn']
-                st.metric("Profit", f"€ {gewinn_value:,.2f}".replace(",", " "))
+                profit_value = selected_row_data['profit']
+                st.metric("Profit", f"€ {profit_value:,.2f}".replace(",", " "))
 
             with col6:
-                indiv_rendite  = round( ((gewinn_value / starting_investment if starting_investment != 0 else 0)*100), 2)   
-                st.metric("ROI", f"{indiv_rendite} %")
+                indiv_return  = round( ((profit_value / starting_investment if starting_investment != 0 else 0)*100), 2)   
+                st.metric("ROI", f"{indiv_return} %")
                 
         else:
             st.info("Choose an investment from the table")

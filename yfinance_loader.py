@@ -13,13 +13,13 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S&P500
         )
 
         # If no directory exists, create it
-        Path("yfinance_indizes").mkdir(parents=True, exist_ok=True)
+        Path("index_data").mkdir(parents=True, exist_ok=True)
 
         df.index = df.index.strftime('%Y-%m-%d')
         df = df[["Close"]]
 
         df.to_json(
-            f"yfinance_indizes/{ticker}.json",
+            f"index_data/{ticker}.json",
             orient="index",
             date_format="iso",
             indent=2
