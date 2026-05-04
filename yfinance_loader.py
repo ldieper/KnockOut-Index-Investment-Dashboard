@@ -26,6 +26,3 @@ def download(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S&P500
         )
 
         print(df.tail())
-
-
-download()
