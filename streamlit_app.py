@@ -351,7 +351,7 @@ if st.session_state.selected_index is not None:
     if not st.session_state.simulations_loaded:
         st.session_state.all_results = load_from_db()
         if st.session_state.all_results is None:
-            with st.spinner("Precomputing.. This may take up to 1:30 minutes. A brilliant moment for some coffee. ☕"):
+            with st.spinner("Precomputing.. This may take up to a few minutes. A brilliant moment for some coffee. ☕"):
                 st.session_state.all_results = precompute_all_simulations()
                 store_to_db(st.session_state.all_results)
         st.session_state.simulations_loaded = True
