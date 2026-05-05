@@ -1,7 +1,6 @@
-import streamlit as st
 import pandas as pd
-import numpy as np
-from investment import Investment
+from functions.df_functions import *
+from classes.investment import Investment
 
 
 def get_cumulative_investment_value(investments_list):
@@ -121,5 +120,65 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
     df_investment = pd.DataFrame(rows)
 
     return investments_list, remaining_budget, df_investment
+
+def precompute_all_simulations(debug_index=None, debug_leverages=None): #debug_index="GDAXI", debug_leverages=3
+    index_map = get_index_map()
+
+    if debug_index:
+        index_map = {debug_index: index_map[debug_index]}
+
+    leverages = [debug_leverages] if debug_leverages else [3, 5, 10]
+    results = {}
+
+    for index_name, file_path in index_map.items():
+        df_all_index = load_df(file_path)
+        df_all_index, mask = prepare_investment_data(df_all_index)
+
+        selected_budget = 500
+        remaining_budget = selected_budget
+
+        for leverage in leverages:
+            investments_list, remaining_budget, df_investment = run_simulation(
+                df_all_index,
+                mask,
+                leverage,
+                selected_budget,
+                remaining_budget  
+            )
+
+            # Calculate metrics
+            metrics = calculate_metrics(df_investment)
+
+            df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "leverage", "profit", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
+            
+            #left join with df_all_index on mathing dates
+            df_plot = pd.merge(
+                df_all_index,
+                df_investment_plot,
+                on="date",
+                how="left"
+            )
+            
+            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "profit", "current_value", "starting_investment"]].copy()
+            df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
+            df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
+            df_table["closing_date"] = df_table["closing_date"].dt.strftime("%d.%m.%y")
+            df_table["current_value"] = df_table["current_value"].where(df_table["active"], 0)
+            df_table = df_table.sort_values(by=["inv_id"], ascending=True)
+
+            cumulative_value = df_investment["cumulative_investment_value"].iloc[-1]
+
+            key = (index_name, leverage)
+            results[key] = {
+                "df_all_index": df_all_index,
+                "df_investment": df_investment,
+                "df_plot": df_plot,
+                "df_table": df_table,
+                "remaining_budget": remaining_budget,  
+                "cumulative_value": cumulative_value,
+                "metrics": metrics,
+            }
+
+    return results
 
 

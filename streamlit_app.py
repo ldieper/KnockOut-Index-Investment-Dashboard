@@ -2,322 +2,24 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from pathlib import Path
-from investment_simulation import run_simulation
-from yfinance_loader import download
-import duckdb
-import pickle # Any to bytes
-import os
+from functions.invest_sim_functions import *
+from functions.df_functions import *
+from functions.db_functions import *
+from functions.plot_functions import *
+from functions.trading_calendar_functions import *
+
 
 st.set_page_config(layout="wide")
 
-st.title("KnockOut-Investments on indices")
 
-#Extracts the index name and file path from the "index_data" folder, returns a dictionary mapping index names to file paths
-def get_index_map(folder="index_data"):
-    index_map = {}
+# State initialisieren
+if "choice" not in st.session_state:
+    st.session_state.choice = None
 
-    if not any(Path(folder).glob("*.json")):
-        print(f"No JSON files found in {folder}, downloading data...")
-        download()
-    
-    for file in Path(folder).glob("*.json"):
-        # Use filename (without extension) as default name
-        name = file.stem
-        
-        name = name.replace("^", "")  # remove ^ if present
-        
-        index_map[name] = str(file)
-    
-    return index_map
+if st.button("Refresh Data"):
+        st.session_state.choice = "Current data"
 
-#@st.cache_data
-def load_df(file_path):
-
-    try:
-        df = pd.read_json(file_path, orient="index")
-        df.index = pd.to_datetime(df.index)
-        df.columns = ["index_value"]
-        df.index.name = "date"
-        return df.reset_index()
-
-    except Exception as error_message:
-        print(f"Error loading JSON: {error_message}")
-        return None
-
-#Funktionen
-def prepare_investment_data(df_all_index):
-    df_all_index["index_growth"] = df_all_index["index_value"].pct_change().fillna(0)
-    
-    df_all_index["index_investpoint"] = None
-
-    df_all_index["yearly_high"] = (
-        df_all_index["index_value"]
-            .rolling(window=252, min_periods=1)  # ~252 Trading Days = 1 Year
-            .max()
-    )
-
-    start_date = df_all_index["date"].iloc[0] + pd.DateOffset(years=1) #Starts one year in, so the 52-week high can be used as reference point
-    mask = df_all_index["date"] > start_date
-
-    # Adding investmentpoints 
-    for i in df_all_index[mask].index:
-        price = df_all_index.loc[i, "index_value"]
-        high = df_all_index.loc[i, "yearly_high"]
-
-        if df_all_index["index_investpoint"].sum() == 0:
-            if price < high * 0.9:
-                df_all_index.loc[i, "index_investpoint"] = True
-                continue
-
-        if price < high * 0.9:
-            if not df_all_index["index_investpoint"].iloc[max(0, i-20):i].any():
-                df_all_index.loc[i, "index_investpoint"] = True
-                continue
-
-    return df_all_index, mask
-
-# Calcuating metrics of the final Investments
-def calculate_metrics(df_investment):
-    final_trades = df_investment.groupby("inv_id").last()
-
-    active_trades = final_trades["active"].sum()
-
-    closed_trades = (~final_trades["active"]).sum()
-    sells_count = (final_trades["closing_reason"] == 1).sum()
-    knockouts_count = (final_trades["closing_reason"] == 0).sum()
-
-    trades_count = (final_trades["closing_reason"] != 2).sum()
-    knockouts_count = (final_trades["closing_reason"] == 0).sum()
-    sells_count = (final_trades["closing_reason"] == 1).sum()
-    not_enough_money_count = (final_trades["closing_reason"] == 2).sum()
-    active_trades = final_trades["active"].sum()
-
-    final_profit = round(final_trades["profit"].sum(), 2)
-    loss_sum = round(final_trades.loc[final_trades["closing_reason"] == 0, "starting_investment"].sum(), 2)
-    total_invested_sum = round(final_trades.loc[final_trades["closing_reason"] != 2, "starting_investment"].sum(), 2)
-
-    total_return = round(final_profit / total_invested_sum * 100, 2) if total_invested_sum > 0 else 0
-
-    return {
-        "closed_trades": closed_trades,
-        "sells_count": sells_count,
-        "knockouts_count": knockouts_count,
-        "not_enough_money_count": not_enough_money_count,
-        "final_profit": final_profit,
-        "trades_count": trades_count,
-        "active_trades": active_trades,
-        "loss_sum": loss_sum,
-        "total_invested_sum": total_invested_sum,
-        "total_return": total_return,
-    }
-
-
-def load_from_db():
-    try:
-        con = duckdb.connect('simulations.db')
-        # Check if table exists
-        if not con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='simulations'").fetchone():
-            con.close()
-            return None
-        
-        # Load data
-        df = con.execute("SELECT * FROM simulations").fetchdf()
-        results = {}
-        for _, row in df.iterrows(): #"_" because index like 0,1,2,3 is not needed (trying some new mechanics)
-            key = (row['index_name'], row['leverage'])
-            results[key] = {
-                'df_all_index': pickle.loads(row['df_all_index_pickle']),
-                'df_investment': pickle.loads(row['df_investment_pickle']),
-                'df_plot': pickle.loads(row['df_plot_pickle']),
-                'df_table': pickle.loads(row['df_table_pickle']),
-                'remaining_budget': row['remaining_budget'],
-                'cumulative_value': row['cumulative_value'],
-                'metrics': pickle.loads(row['metrics_pickle'])
-            }
-        
-        # Check if all combinations exist
-        index_map = get_index_map()
-        expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
-        if set(results.keys()) != expected_keys:
-            con.close()
-            return None
-        
-        con.close()
-        return results
-    
-    except Exception as error_message:
-        print(f"Error loading from DB: {error_message}")
-        return None
-
-
-def store_to_db(results):
-    con = duckdb.connect('simulations.db')
-    con.execute("DROP TABLE IF EXISTS simulations")
-    con.execute("CREATE TABLE simulations (index_name VARCHAR, leverage INTEGER, df_all_index_pickle BLOB, df_investment_pickle BLOB, df_plot_pickle BLOB, df_table_pickle BLOB, remaining_budget DOUBLE, cumulative_value DOUBLE, metrics_pickle BLOB)")
-    for key, value in results.items():
-        index_name, leverage = key
-        con.execute("INSERT INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
-            index_name,
-            leverage,
-            pickle.dumps(value['df_all_index']),
-            pickle.dumps(value['df_investment']),
-            pickle.dumps(value['df_plot']),
-            pickle.dumps(value['df_table']),
-            value['remaining_budget'],
-            value['cumulative_value'],
-            pickle.dumps(value['metrics'])
-        ])
-    con.close()
-
-
-# Function for creating plot of individual investments
-def create_investment_detail_plot(df_investment, df_all_index, inv_id):
-    if inv_id is None:
-        return None
-    
-    # Filter to only this investment
-    df_inv = df_investment[df_investment["inv_id"] == inv_id][["date", "current_value", "leverage", "knockout_barrier"]].copy()
-    
-    if df_inv.empty:
-        return None
-    
-    # Merge with index data for comparison
-    df_plot_detail = pd.merge(
-        df_all_index[["date", "index_value"]],
-        df_inv,
-        on="date",
-        how="inner"
-    )
-
-    legend = alt.Legend(
-    orient="top"
-    )
-
-    color = alt.Color(
-        "lines:N",
-        legend=legend,
-        scale=alt.Scale(
-            domain=["Index", "Barrier", "Investment"],
-            range=["#BA2BAC", "#c4265e", "#e2e22e"]
-        )
-    )
-    
-    # Create base chart with X axis
-    base = alt.Chart(df_plot_detail).encode(
-        x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
-    )
-    
-    # LEFT AXIS: Index value and Knockout barrier
-    line_index = base.transform_calculate(
-        lines="'Index'"
-        ).mark_line(size=2).encode(
-            y=alt.Y("index_value:Q", title="Index & Barrier Value", scale=alt.Scale(zero=False)),
-            color=color
-    )
-    
-    line_barrier = base.transform_calculate(
-        lines="'Barrier'"
-        ).mark_line(strokeDash=[5, 5], size=2).encode(   
-            y=alt.Y("knockout_barrier:Q", scale=alt.Scale(zero=False)),
-            color=color
-    )
-    
-    # RIGHT AXIS: Investment value (independent scale)
-    line_investment = base.transform_calculate(
-        lines="'Investment'"
-        ).mark_line(size=2.5).encode(
-            y=alt.Y("current_value:Q", title="Investment Value (€)", scale=alt.Scale(zero=False), axis=alt.Axis(orient="right")),
-            color=color
-    )
-    
-
-    left_chart = alt.layer(line_index, line_barrier)
-    
-    chart = alt.layer(left_chart, line_investment).resolve_scale(
-        y="independent"
-    ).properties(
-        height=250,
-        title=f"Investment: {int(inv_id)}",
-    )
-    
-    return chart
-
-
-def filter_nearest_barriers(df_plot, top_n=2):
-    if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
-        return df_plot
-    
-    # Calculate absolute distance from index to barrier
-    abs_dist = (df_plot["index_value"] - df_plot["knockout_barrier"]).abs()
-    
-    # Rank by distance within each date group, keep only top N (defaut = 2)
-    rank = df_plot.groupby("date").cumcount()
-    df_plot_temp = df_plot.assign(abs_dist=abs_dist, rank=rank)
-    df_plot_temp["rank"] = df_plot_temp.groupby("date")["abs_dist"].rank(method="first")
-    
-    return df_plot_temp[df_plot_temp["rank"] <= top_n].drop(columns=["abs_dist", "rank"])
-
-
-#@st.cache_data
-def precompute_all_simulations(debug_index=None, debug_leverages=None): #debug_index="GDAXI", debug_leverages=3
-    index_map = get_index_map()
-
-    if debug_index:
-        index_map = {debug_index: index_map[debug_index]}
-
-    leverages = [debug_leverages] if debug_leverages else [3, 5, 10]
-    results = {}
-
-    for index_name, file_path in index_map.items():
-        df_all_index = load_df(file_path)
-        df_all_index, mask = prepare_investment_data(df_all_index)
-
-        selected_budget = 500
-        remaining_budget = selected_budget
-
-        for leverage in leverages:
-            investments_list, remaining_budget, df_investment = run_simulation(
-                df_all_index,
-                mask,
-                leverage,
-                selected_budget,
-                remaining_budget  
-            )
-
-            # Calculate metrics
-            metrics = calculate_metrics(df_investment)
-
-            df_investment_plot = df_investment[["date", "current_value", "inv_id", "knockout_barrier", "leverage", "profit", "cumulative_investment_value", "starting_date", "closing_date"]].drop_duplicates(subset=["date", "inv_id"], keep="last")
-            
-            #left join with df_all_index on mathing dates
-            df_plot = pd.merge(
-                df_all_index,
-                df_investment_plot,
-                on="date",
-                how="left"
-            )
-            
-            df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "profit", "current_value", "starting_investment"]].copy()
-            df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
-            df_table["starting_date"] = df_table["starting_date"].dt.strftime("%d.%m.%y")
-            df_table["closing_date"] = df_table["closing_date"].dt.strftime("%d.%m.%y")
-            df_table["current_value"] = df_table["current_value"].where(df_table["active"], 0)
-            df_table = df_table.sort_values(by=["inv_id"], ascending=True)
-
-            cumulative_value = df_investment["cumulative_investment_value"].iloc[-1]
-
-            key = (index_name, leverage)
-            results[key] = {
-                "df_all_index": df_all_index,
-                "df_investment": df_investment,
-                "df_plot": df_plot,
-                "df_table": df_table,
-                "remaining_budget": remaining_budget,  
-                "cumulative_value": cumulative_value,
-                "metrics": metrics,
-            }
-
-    return results
+# Ergebnis anzeigen
 
 
 #"Loading Screen"
@@ -326,6 +28,12 @@ def precompute_all_simulations(debug_index=None, debug_leverages=None): #debug_i
 #download(tickers=["^GDAXI", "^GSPC", "^HSI"])
 
 #st.button("Load historic data")
+
+
+
+
+
+
 
 
 #Init
@@ -346,7 +54,7 @@ if "simulations_loaded" not in st.session_state:
 if "all_results" not in st.session_state:
     st.session_state.all_results = None
 
-# Rest of the app code only runs if selected_index is not None
+# Checking for completion of calculations and laoding of data
 if st.session_state.selected_index is not None:
     if not st.session_state.simulations_loaded:
         st.session_state.all_results = load_from_db()
@@ -362,8 +70,8 @@ if st.session_state.selected_index is not None:
 if st.session_state.selected_index is None or st.session_state.all_results is None:
     st.error("Data not loaded properly. Selected index or results are missing.")
     st.stop()
-
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
+
 
 #assigning current to variables
 df_all_index = current["df_all_index"]
@@ -374,12 +82,24 @@ cumulative_value = current["cumulative_value"]
 metrics = current["metrics"]
 
 
+#Dynamic Header (historic or up to date)
+last_trading_day = get_last_trading_day().date()
+df_last_day = get_last_investment_day(df_all_index).date()
+
+if df_last_day < last_trading_day:
+    st.header(f"KnockOut-Investments on indices (historic)")
+else:
+    st.header(f"KnockOut-Investments on indices")
+
+
 #Layout / UI
 top = st.container(border=True)
 mid = st.container(border=True)
 bottom = st.container(border=True)
 
+
 with top:
+
     st.subheader(f"Index performance - {st.session_state.selected_index}")
 
     df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
