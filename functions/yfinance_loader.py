@@ -2,6 +2,8 @@ from pathlib import Path
 import yfinance as yf
 
 
+#Update: Loads only new Data if Data is there?
+
 # Loads the past 20years of the chosen products and saves them once. (update for newer data must be done manually!)
 def download(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S&P500, ^HSI = Hang Seng Index; e.g. ^NDX = Nasdaq100, STOXX50E = EuroStoxx50 etc.
     for ticker in tickers:

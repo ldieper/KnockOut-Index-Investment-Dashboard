@@ -1,43 +1,23 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-from pathlib import Path
 from functions.invest_sim_functions import *
 from functions.df_functions import *
 from functions.db_functions import *
 from functions.plot_functions import *
 from functions.trading_calendar_functions import *
+from functions.loading_phrases_functions import *
 
 
 st.set_page_config(layout="wide")
 
 
-# State initialisieren
-if "choice" not in st.session_state:
-    st.session_state.choice = None
-
-if st.button("Refresh Data"):
-        st.session_state.choice = "Current data"
-
-# Ergebnis anzeigen
-
-
-#"Loading Screen"
-
-#st.button("Load new data")
-#download(tickers=["^GDAXI", "^GSPC", "^HSI"])
-
-#st.button("Load historic data")
-
-
-
-
-
-
-
-
 #Init
 index_map = get_index_map()
+
+
+if "refresh_data" not in st.session_state:
+    st.session_state.refresh_data = None
 
 if "selected_index" not in st.session_state:
     if index_map:
@@ -59,7 +39,7 @@ if st.session_state.selected_index is not None:
     if not st.session_state.simulations_loaded:
         st.session_state.all_results = load_from_db()
         if st.session_state.all_results is None:
-            with st.spinner("Precomputing.. This may take up to a few minutes. A brilliant moment for some coffee. ☕"):
+            with st.spinner("Precomputing.. " + get_random_phrase()):
                 st.session_state.all_results = precompute_all_simulations()
                 store_to_db(st.session_state.all_results)
         st.session_state.simulations_loaded = True
@@ -71,6 +51,24 @@ if st.session_state.selected_index is None or st.session_state.all_results is No
     st.error("Data not loaded properly. Selected index or results are missing.")
     st.stop()
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
+
+
+#Downloader only with new Data?
+if st.session_state.refresh_data: #DB and DF should be added with new Data and calclations rerun
+    index_map = get_index_map()
+    st.session_state.selected_index = list(index_map.keys())[0]
+
+    st.session_state.all_results = precompute_all_simulations()
+    store_to_db(st.session_state.all_results)
+
+    current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
+
+    df_all_index = current["df_all_index"]
+    df_investment = current["df_investment"]
+    df_plot = current["df_plot"]
+    remaining_budget = current["remaining_budget"]
+    cumulative_value = current["cumulative_value"]
+    metrics = current["metrics"]
 
 
 #assigning current to variables
@@ -233,6 +231,11 @@ with mid:
                     [3, 5, 10],
                     key="selected_leverage"
                 )
+            
+
+            if st.button("Refresh Data"):
+                st.session_state.refresh_data = True
+
 
 
     st.markdown('</div>', unsafe_allow_html=True)

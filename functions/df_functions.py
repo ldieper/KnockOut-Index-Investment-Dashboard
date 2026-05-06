@@ -10,6 +10,8 @@ def get_index_map(folder="index_data"):
         print(f"No JSON files found in {folder}, downloading data...")
         download()
     
+    #New Data should only be added when data is being refreshed
+
     for file in Path(folder).glob("*.json"):
         # Use filename (without extension) as default name
         name = file.stem
