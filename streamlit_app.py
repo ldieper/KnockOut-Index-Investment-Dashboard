@@ -7,17 +7,20 @@ from functions.db_functions import *
 from functions.plot_functions import *
 from functions.trading_calendar_functions import *
 from functions.loading_phrases_functions import *
+from functions.yfinance_loader import *
 
 
 st.set_page_config(layout="wide")
 
 
 #Init
+if get_index_map() == None:
+    download_data()
 index_map = get_index_map()
 
 
 if "refresh_data" not in st.session_state:
-    st.session_state.refresh_data = None
+    st.session_state.refresh_data = False
 
 if "selected_index" not in st.session_state:
     if index_map:
@@ -34,16 +37,42 @@ if "simulations_loaded" not in st.session_state:
 if "all_results" not in st.session_state:
     st.session_state.all_results = None
 
+
+
+
 # Checking for completion of calculations and laoding of data
 if st.session_state.selected_index is not None:
     if not st.session_state.simulations_loaded:
-        st.session_state.all_results = load_from_db()
-        if st.session_state.all_results is None:
+        st.session_state.all_results = load_from_db() #values from DB are being loaded into sesion_state
+        expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
+        missing_keys = expected_keys - set(st.session_state.all_results.keys())
+
+        if missing_keys: #Data from DB is not complete/empty -> New Data needs to be calculated
             with st.spinner("Precomputing.. " + get_random_phrase()):
-                st.session_state.all_results = precompute_all_simulations()
-                store_to_db(st.session_state.all_results)
+                new_results = precompute_all_simulations(keys_to_compute=missing_keys) #if db was empty: missing keys = all available keys
+                store_to_db(new_results)
+                st.session_state.all_results.update(new_results)
+                st.cache_data.clear()
         st.session_state.simulations_loaded = True
-        st.rerun()
+        #st.rerun()
+
+     
+if st.session_state.refresh_data:
+    #refresh
+    print(f"Refresh!")
+    download_data()
+    st.session_state.all_results = load_from_db()
+    expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
+    missing_keys = expected_keys - set(st.session_state.all_results.keys())
+
+    if missing_keys: 
+        with st.spinner("Updating data.. " + get_random_phrase()):
+            new_results = precompute_all_simulations(keys_to_compute=missing_keys) 
+            store_to_db(new_results)
+            st.session_state.all_results.update(new_results)
+            st.cache_data.clear()
+
+    st.session_state.refresh_data == False
 
 
 #Storing calculations in current
@@ -53,28 +82,10 @@ if st.session_state.selected_index is None or st.session_state.all_results is No
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
 
 
-#Downloader only with new Data?
-if st.session_state.refresh_data: #DB and DF should be added with new Data and calclations rerun
-    index_map = get_index_map()
-    st.session_state.selected_index = list(index_map.keys())[0]
-
-    st.session_state.all_results = precompute_all_simulations()
-    store_to_db(st.session_state.all_results)
-
-    current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
-
-    df_all_index = current["df_all_index"]
-    df_investment = current["df_investment"]
-    df_plot = current["df_plot"]
-    remaining_budget = current["remaining_budget"]
-    cumulative_value = current["cumulative_value"]
-    metrics = current["metrics"]
-
-
-#assigning current to variables
+#assigning current values for all indices and leverage
 df_all_index = current["df_all_index"]
 df_investment = current["df_investment"]
-df_plot = current["df_plot"]
+df_plot_filtered = current["df_plot_filtered"]
 remaining_budget = current["remaining_budget"]
 cumulative_value = current["cumulative_value"]
 metrics = current["metrics"]
@@ -99,8 +110,6 @@ bottom = st.container(border=True)
 with top:
 
     st.subheader(f"Index performance - {st.session_state.selected_index}")
-
-    df_plot_filtered = filter_nearest_barriers(df_plot, top_n=2)
 
     legend = alt.Legend(
         orient="none",
@@ -232,9 +241,10 @@ with mid:
                     key="selected_leverage"
                 )
             
-
+        with st.container(border=False):
             if st.button("Refresh Data"):
                 st.session_state.refresh_data = True
+                #st.rerun()
 
 
 

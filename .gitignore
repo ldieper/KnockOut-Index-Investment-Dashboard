@@ -3,3 +3,4 @@ __pycache__
 simulations.db
 index_data
 settings.json
+database

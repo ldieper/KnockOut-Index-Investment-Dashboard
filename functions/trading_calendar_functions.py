@@ -2,11 +2,11 @@ from datetime import datetime, timedelta
 
 def get_last_trading_day():
     today = datetime.today()
-    weekday = today.weekday()  # Montag = 0, Sonntag = 6
+    weekday = today.weekday()  # Monday = 0, Sunday = 6
 
-    if weekday == 0:  # Montag → Freitag
+    if weekday == 0:  # Monday till Friday
         delta = 3
-    elif weekday == 6:  # Sonntag → Freitag
+    elif weekday == 6:  # Sunday till Friday
         delta = 2
     else:
         delta = 1

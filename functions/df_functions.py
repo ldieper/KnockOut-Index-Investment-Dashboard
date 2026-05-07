@@ -1,18 +1,16 @@
 import pandas as pd
 from pathlib import Path
-from functions.yfinance_loader import download
+from functions.yfinance_loader import *
 
 
 def get_index_map(folder="index_data"):
     index_map = {}
 
-    if not any(Path(folder).glob("*.json")):
-        print(f"No JSON files found in {folder}, downloading data...")
-        download()
-    
-    #New Data should only be added when data is being refreshed
+    if not any(Path(folder).glob("*.parquet")):
+        print(f"No Parquet files found in {folder}, downloading data...")
+        return None
 
-    for file in Path(folder).glob("*.json"):
+    for file in Path(folder).glob("*.parquet"):
         # Use filename (without extension) as default name
         name = file.stem
         
@@ -23,18 +21,16 @@ def get_index_map(folder="index_data"):
     return index_map
 
 
-
 def load_df(file_path):
 
     try:
-        df = pd.read_json(file_path, orient="index")
-        df.index = pd.to_datetime(df.index)
+        df = pd.read_parquet(file_path)
         df.columns = ["index_value"]
         df.index.name = "date"
         return df.reset_index()
 
     except Exception as error_message:
-        print(f"Error loading JSON: {error_message}")
+        print(f"Error loading Parquet: {error_message}")
         return None
 
 
