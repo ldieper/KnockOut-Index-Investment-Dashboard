@@ -43,7 +43,7 @@ def store_to_db(results):
     con = duckdb.connect(db_path)
 
     con.execute("""
-        CREATE OR REPLACE TABLE simulations (
+        CREATE TABLE IF NOT EXISTS simulations (
             index_name VARCHAR,
             leverage INTEGER,
 
@@ -54,7 +54,9 @@ def store_to_db(results):
                 
             remaining_budget DOUBLE,
             cumulative_value DOUBLE,
-            metrics_pickle BLOB
+            metrics_pickle BLOB,
+                
+            PRIMARY KEY (index_name, leverage)
         )
     """)
 
@@ -78,7 +80,7 @@ def store_to_db(results):
             )
             paths[name] = path
 
-        con.execute("INSERT INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
+        con.execute("INSERT OR REPLACE INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
             index_name,
             leverage,
             paths["df_all_index"],

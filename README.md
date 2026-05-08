@@ -20,12 +20,6 @@ The main features of the dashboard are:
 - **Key performance metrics** for evaluating investment outcomes
 - **Detailed analysis** of individual investment periods
 
-## Planned features
-
-- [x] Persistent DB
-- [x] Flow-chart of process
-- [x] Budget Bug
-
 ## The investment strategy in detail
 
 ### Capital Allocation
@@ -77,8 +71,7 @@ source .venv/bin/activate
 pip install streamlit pandas altair yfinance duckdb
 ```
 
-After setting up the virtual environment run `yfinance_loader.py` and `investment.py` once.
-You can now continue with running the main app.
+### Starting the dashboard
 
 ```bash
 streamlit run streamlit_app.py

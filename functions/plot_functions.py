@@ -73,7 +73,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     return chart
 
 
-def filter_nearest_barriers(df_plot, top_n=2):
+def filter_nearest_barriers(df_plot, top_n=1):
     if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
         return df_plot
     

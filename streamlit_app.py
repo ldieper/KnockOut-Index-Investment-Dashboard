@@ -59,9 +59,16 @@ if st.session_state.selected_index is not None:
      
 if st.session_state.refresh_data:
     #refresh
-    print(f"Refresh!")
-    download_data()
-    st.session_state.all_results = load_from_db()
+    # Reset flags/state
+    st.session_state.simulations_loaded = False
+    st.session_state.all_results = {}
+
+    # Clear Streamlit caches
+    st.cache_data.clear()
+    st.cache_resource.clear()
+
+    #Download and recompute Data
+    update_data()
     expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
     missing_keys = expected_keys - set(st.session_state.all_results.keys())
 
@@ -72,7 +79,14 @@ if st.session_state.refresh_data:
             st.session_state.all_results.update(new_results)
             st.cache_data.clear()
 
-    st.session_state.refresh_data == False
+    st.session_state.refresh_data = False
+    st.session_state.simulations_loaded = True
+
+    # Force rerun
+    st.rerun()
+
+
+
 
 
 #Storing calculations in current
@@ -242,7 +256,7 @@ with mid:
                 )
             
         with st.container(border=False):
-            if st.button("Refresh Data"):
+            if st.button("Refresh Data | :material/mouse: 2x"):
                 st.session_state.refresh_data = True
                 #st.rerun()
 

@@ -167,7 +167,7 @@ def precompute_all_simulations(keys_to_compute=None, debug_index=None, debug_lev
             on="date",
             how="left"
         )
-        df_plot_filtered = filter_nearest_barriers(df_plot,top_n=2)
+        df_plot_filtered = filter_nearest_barriers(df_plot,top_n=1)
         
         df_table = df_investment[df_investment["closing_reason"] != 2][["inv_id", "active", "closing_reason", "starting_date", "closing_date", "profit", "current_value", "starting_investment"]].copy()
         df_table = df_table.groupby("inv_id").last().reset_index(drop=False)
