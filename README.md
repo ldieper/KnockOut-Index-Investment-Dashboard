@@ -84,4 +84,4 @@ streamlit run streamlit_app.py
 
 ## Dashboard
 
-![Preview](visuals/demo.gif)
+![Preview](visuals/Dashboard_Demo.gif)
