@@ -18,7 +18,7 @@ if get_index_map() == None:
     download_data()
 index_map = get_index_map()
 
-
+#Defaults for userinput variables
 if "refresh_data" not in st.session_state:
     st.session_state.refresh_data = False
 
@@ -26,7 +26,7 @@ if "selected_index" not in st.session_state:
     if index_map:
         st.session_state.selected_index = list(index_map.keys())[0]
     else:
-        st.session_state.selected_index = None  # or handle appropriately
+        st.session_state.selected_index = None
 
 if "selected_leverage" not in st.session_state:
     st.session_state.selected_leverage = 3
@@ -56,9 +56,9 @@ if st.session_state.selected_index is not None:
         st.session_state.simulations_loaded = True
         #st.rerun()
 
-     
+
+#Data-Refresh button clicked:
 if st.session_state.refresh_data:
-    #refresh
     # Reset flags/state
     st.session_state.simulations_loaded = False
     st.session_state.all_results = {}
@@ -72,6 +72,7 @@ if st.session_state.refresh_data:
     expected_keys = {(index_name, leverage) for index_name in index_map.keys() for leverage in [3, 5, 10]}
     missing_keys = expected_keys - set(st.session_state.all_results.keys())
 
+    #If not all indices are loaded
     if missing_keys: 
         with st.spinner("Updating data.. " + get_random_phrase()):
             new_results = precompute_all_simulations(keys_to_compute=missing_keys) 
@@ -79,7 +80,7 @@ if st.session_state.refresh_data:
             st.session_state.all_results.update(new_results)
             st.cache_data.clear()
 
-    st.session_state.refresh_data = False
+    st.session_state.refresh_data = False #Deactivating button to be cklickable again
     st.session_state.simulations_loaded = True
 
     # Force rerun
@@ -88,11 +89,12 @@ if st.session_state.refresh_data:
 
 
 
-
-#Storing calculations in current
+#If data is still not loaded: Error
 if st.session_state.selected_index is None or st.session_state.all_results is None:
     st.error("Data not loaded properly. Selected index or results are missing.")
     st.stop()
+
+#Storing calculations in current
 current = st.session_state.all_results[(st.session_state.selected_index, st.session_state.selected_leverage)]
 
 
@@ -122,19 +124,21 @@ bottom = st.container(border=True)
 
 
 with top:
-
     st.subheader(f"Index performance - {st.session_state.selected_index}")
 
+    #Offset of Legend to be in top left corner
     legend = alt.Legend(
         orient="none",
         legendX=10,
         legendY=10
     )
 
+    #Base chart
     base = alt.Chart(df_plot_filtered).encode(
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
 
+    #Group for the indipendent left axis
     left_axis_group = alt.layer(
         base.transform_calculate(lines="'Index'").mark_line().encode(
             y=alt.Y("index_value:Q", title="Index & Barrier Level"),
@@ -150,6 +154,7 @@ with top:
         )
     )
 
+    #Group for the indipendent right axis
     right_axis_group = alt.Chart(df_investment).transform_calculate(
         lines="'Investment'"
     ).mark_line(size=2).encode(
@@ -165,6 +170,7 @@ with top:
         )
     )
 
+    #Combining Charts to be displayed as one
     combined_chart = alt.layer(
         left_axis_group,
         right_axis_group
@@ -175,8 +181,9 @@ with top:
     st.altair_chart(combined_chart, width="stretch")
     
 
+#Metrics and settings
 with mid:
-
+    #css for metric buttons (Border on Hover) | Not needed, only aesthetic use
     st.markdown("""
     <style>
 
@@ -202,6 +209,7 @@ with mid:
 
     mid_left, mid_right = st.columns([0.7, 0.3])
 
+    #Metrics of total investment
     with mid_left:
 
         with st.container(border=True):
@@ -230,8 +238,10 @@ with mid:
             with col5:
                 st.metric("Accessible budget", f"€ {remaining_budget:,.2f}".replace(",", " "))
                 st.metric("Monthly budget", f"€ 500,00")
-                #st.metric("Anzahl nicht ausgeführter Investments (zu wenig Budget)", f"{metrics['not_enough_money_count']}", "Test")
+                #st.metric("Trades with not enough Budget to start", f"{metrics['not_enough_money_count']}")
+                
 
+    #Settings for Dashboard
     with mid_right:
         with st.container(border=True):
 
@@ -258,13 +268,11 @@ with mid:
         with st.container(border=False):
             if st.button("Refresh Data | :material/mouse: 2x"):
                 st.session_state.refresh_data = True
-                #st.rerun()
-
-
 
     st.markdown('</div>', unsafe_allow_html=True)
 
 
+#Metrics of individual investments
 with bottom:
 
     bottom_left, bottom_right = st.columns([0.12, 0.88])
@@ -274,6 +282,7 @@ with bottom:
     with bottom_left:
         st.subheader("Investments")
 
+        #For better readability
         closing_reason_map = {0.0: "KnockOut", 1.0: "Sold", 2.0: "No Money", None: "Active"}
         
         # Add mapped closing_reason column to display
@@ -282,6 +291,7 @@ with bottom:
             lambda x: closing_reason_map.get(float(x), "Unbekannt") if pd.notna(x) else "Aktiv"
         )
         
+        #Table to click on all possible investments of choosen index
         event = st.dataframe(
             df_display[["inv_id", "closing_reason"]],
             hide_index=True,
@@ -290,13 +300,14 @@ with bottom:
             selection_mode="single-row"
         )
 
+        #Handling selected investment of table
         selected_row = None
         if event.selection.rows:
             selected_row = event.selection.rows[0]
         else:
             selected_row = 0 if len(df_filtered) > 0 else None  # Default: 1st row
 
-    
+    #View and metrics of choosen investment
     with bottom_right:
         st.subheader("Detailed view of Investments")
 
@@ -320,7 +331,7 @@ with bottom:
 
             col1, col2, col3 ,col4, col5, col6 = st.columns(6)
 
-            # Displaying metrics (formatted)
+            # Metrics
             with col1:
                 starting_date = selected_row_data['starting_date']
                 st.metric("Start", f"{starting_date}")

@@ -1,6 +1,7 @@
 import pandas as pd
 import altair as alt
 
+#Function to create a plot for a individualk investment
 def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     if inv_id is None:
         return None
@@ -32,12 +33,12 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
         )
     )
     
-    # Create base chart with X axis
+    #Create base chart with X axis
     base = alt.Chart(df_plot_detail).encode(
         x=alt.X("date:T", title="Datum", axis=alt.Axis(format="%d %b %y"))
     )
     
-    # LEFT AXIS: Index value and Knockout barrier
+    #Index value and Knockout barrier
     line_index = base.transform_calculate(
         lines="'Index'"
         ).mark_line(size=2).encode(
@@ -52,7 +53,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
             color=color
     )
     
-    # RIGHT AXIS: Investment value (independent scale)
+    #Investment value (independent scale)
     line_investment = base.transform_calculate(
         lines="'Investment'"
         ).mark_line(size=2.5).encode(
@@ -73,6 +74,7 @@ def create_investment_detail_plot(df_investment, df_all_index, inv_id):
     return chart
 
 
+#Function to only display the top n barriers for readability
 def filter_nearest_barriers(df_plot, top_n=1):
     if "knockout_barrier" not in df_plot.columns or df_plot["knockout_barrier"].isna().all():
         return df_plot

@@ -3,8 +3,9 @@ import pandas as pd
 import pickle
 import os
 
-
+#Function to load data from the database
 def load_from_db():
+    #Looking for database in files
     db_path = os.path.join("database", "simulations.db")
     if not os.path.exists(db_path):
         return {}
@@ -13,7 +14,7 @@ def load_from_db():
     try:
         df = con.execute("SELECT * FROM simulations").fetchdf()
         results = {}
-        for _, row in df.iterrows():
+        for _, row in df.iterrows(): #Iterating through rows
 
             key = (row["index_name"], row["leverage"])
 
@@ -28,6 +29,7 @@ def load_from_db():
             }
         return results
     
+    #Catching exceptions
     except Exception as e:
         print(f"Error loading DB: {e}")
         return {}
@@ -35,13 +37,15 @@ def load_from_db():
     finally:
         con.close()
 
-
+#Function to store data into database
 def store_to_db(results):
+    #Looking for database in files (create if not exists)
     db_path = os.path.join("database", "simulations.db")
     parquet_dir = os.path.join("database", "parquet")
     os.makedirs(parquet_dir, exist_ok=True)
     con = duckdb.connect(db_path)
 
+    #Creating Table
     con.execute("""
         CREATE TABLE IF NOT EXISTS simulations (
             index_name VARCHAR,
@@ -60,6 +64,7 @@ def store_to_db(results):
         )
     """)
 
+    #Iterating through dataframes to get values
     for (index_name, leverage), value in results.items():
         paths = {}
         for name in [
@@ -69,6 +74,7 @@ def store_to_db(results):
             "df_plot_filtered"
         ]:
             
+            #Name conventions
             path = os.path.join(
                 parquet_dir,
                 f"{index_name}_{leverage}_{name}.parquet"
@@ -80,6 +86,7 @@ def store_to_db(results):
             )
             paths[name] = path
 
+        #Inserting values
         con.execute("INSERT OR REPLACE INTO simulations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", [
             index_name,
             leverage,

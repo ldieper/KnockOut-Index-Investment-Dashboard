@@ -2,7 +2,7 @@ import pandas as pd
 from pathlib import Path
 from functions.yfinance_loader import *
 
-
+#Map of the downloaded indices
 def get_index_map(folder="index_data"):
     index_map = {}
 
@@ -21,6 +21,7 @@ def get_index_map(folder="index_data"):
     return index_map
 
 
+#Load the downlaoded dataframes
 def load_df(file_path):
 
     try:
@@ -29,17 +30,19 @@ def load_df(file_path):
         df.index.name = "date"
         return df.reset_index()
 
+    #Catching exception
     except Exception as error_message:
         print(f"Error loading Parquet: {error_message}")
         return None
 
 
-
+#Setting the investmentpoints in the dataframe
 def prepare_investment_data(df_all_index):
     df_all_index["index_growth"] = df_all_index["index_value"].pct_change().fillna(0)
     
     df_all_index["index_investpoint"] = None
 
+    #52-week-high (rolling for every day)
     df_all_index["yearly_high"] = (
         df_all_index["index_value"]
             .rolling(window=252, min_periods=1)  # ~252 Trading Days = 1 Year
@@ -67,7 +70,7 @@ def prepare_investment_data(df_all_index):
     return df_all_index, mask
 
 
-
+#Calculating metrics and returning them as one
 def calculate_metrics(df_investment):
     final_trades = df_investment.groupby("inv_id").last()
 

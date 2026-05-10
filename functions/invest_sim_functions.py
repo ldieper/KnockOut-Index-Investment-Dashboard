@@ -3,7 +3,7 @@ from functions.df_functions import *
 from classes.investment import Investment
 from functions.plot_functions import filter_nearest_barriers
 
-
+#Function fo running the investment simulation for all investments and returninng the dataframe
 def run_simulation(source, filter, selected_leverage, selected_budget, remaining_budget):
     df = source.copy()
     
@@ -17,12 +17,14 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
     investment_count = 0
     cumulative_value = 0
 
+    #iterate through the dataframe (filter = starting 1 year after launch of index to rely on 52-week-high)
     for i in df[filter].index:
 
+        #every month (20 trading days) the budget is being refilled
         if i % 20 == 0:
             remaining_budget += selected_budget
 
-
+        #Creating new investment object
         if df.loc[i, "index_investpoint"]:
             
             investment_count += 1
@@ -42,6 +44,7 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
                 remaining_budget -= new_inv.get_investment_value()
                 cumulative_value += new_inv.get_investment_value()
 
+        #iterating through all investments for checking status like knockout possibilities and setting values
         for inv in investments_list:
 
             if not inv.active:
@@ -55,6 +58,7 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
             new_value = inv.get_investment_value()
             cumulative_value += (new_value - old_value)
 
+            #Knockout by leverage calculation (down -100% effectively)
             if inv.get_leverage() == 0:
                 closing_value = inv.get_investment_value()
                 inv.reset_investment(type="knockout")
@@ -72,6 +76,7 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
                 })
                 continue
 
+            #Knockout by index touching knockout_barrier
             if inv.get_investment_value() <= 0:
                 closing_value = inv.get_investment_value()
                 inv.reset_investment(type="knockout")
@@ -88,7 +93,8 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
                     "closing_date": closing_date,
                 })
                 continue
-
+            
+            #Sell because effective leverage falls to  1.5 or below
             if inv.get_leverage() <= 1.5:
                 closing_value = inv.get_investment_value()
                 inv.reset_investment(type="sell")
@@ -105,7 +111,8 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
                     "closing_date": closing_date,
                 })
                 continue
-
+            
+            #Storing values in each investment
             rows.append({
                 "date": dates[i],
                 "inv_id": inv.id,
@@ -123,20 +130,22 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
 
     return remaining_budget, df_investment
 
-
+#Running simulation for all possible indices and leverage options
 def precompute_all_simulations(keys_to_compute=None, debug_index=None, debug_leverages=None): #debug_index="GDAXI", debug_leverages=3
     index_map = get_index_map()
 
+    #Debug mode for especially returning specific inndex and leverage (also good for faster loaing times while fixing other bugs)
     if debug_index:
         index_map = {debug_index: index_map[debug_index]}
-
     leverages = [debug_leverages] if debug_leverages else [3, 5, 10]
     
+    #Getting the wanted indices and leverages
     if keys_to_compute is None:
         keys_to_compute = {(index_name, leverage) for index_name in index_map.keys() for leverage in leverages}
     
     results = {}
 
+    #Iterate for all indices and their possible leverages
     for index_name, leverage in keys_to_compute:
         if index_name not in index_map:
             continue
@@ -178,6 +187,7 @@ def precompute_all_simulations(keys_to_compute=None, debug_index=None, debug_lev
 
         cumulative_value = df_investment["cumulative_investment_value"].iloc[-1]
 
+        #Storing values for each configuration
         key = (index_name, leverage)
         results[key] = {
             "df_all_index": df_all_index,

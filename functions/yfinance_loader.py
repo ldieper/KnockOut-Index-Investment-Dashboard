@@ -4,8 +4,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 
-#Update: Loads only new Data if Data is there?
-
 # Loads the past 20years of the chosen products and saves them once. (update for newer data must be done manually!)
 def download_data(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S&P500, ^HSI = Hang Seng Index; e.g. ^NDX = Nasdaq100, STOXX50E = EuroStoxx50 etc.
     for ticker in tickers:
@@ -25,7 +23,7 @@ def download_data(tickers=["^GDAXI", "^GSPC", "^HSI"]): #^GDAXI = DAX, ^GSPC = S
 
         print(df.tail())
 
-
+#Updates the downloaded indices to the newest trading day (fills gap to old data)
 def update_data(tickers=["^GDAXI", "^GSPC", "^HSI"]):
     for ticker in tickers:
         file_path = Path(f"index_data/{ticker}.parquet")
