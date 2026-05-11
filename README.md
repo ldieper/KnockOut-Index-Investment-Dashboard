@@ -2,7 +2,7 @@
 
 This **study project** is a Streamlit-based dashboard for simulating leveraged investments in major stock indices during market corrections. It allows users to explore how leveraged products would have performed when invested in downside phases and recovery periods.
 
-The application is written in Python and currently supports simulations on DAX, FTSE 50, and S&P 500 indices, with stock Data starting in 2006. It provides an interactive interface to configure investment parameters and visualize key metrics.
+The application is written in Python and currently supports simulations on DAX, FTSE 50, and S&P 500 indices, with stock Data starting in 2006. It provides an interactive interface to configure investment parameters and visualize key metrics. The index data is being stored as a .parquet file due to their time-series structure. For improved loading times a duckdb is being set up, which supports parquet by default and provides direct access to loaded simulations from previous sessions.
 
 ## Technology
 
@@ -19,6 +19,10 @@ The main features of the dashboard are:
 - **Interactive** plots showing portfolio performance over time
 - **Key performance metrics** for evaluating investment outcomes
 - **Detailed analysis** of individual investment periods
+
+## Dashboard
+
+![Preview](visuals/Dashboard_Demo.gif)
 
 ## The investment strategy in detail
 
@@ -71,17 +75,21 @@ source .venv/bin/activate
 pip install streamlit pandas altair yfinance duckdb
 ```
 
-### Starting the dashboard
+## Technical structure
+
+To start the dashboard execute:
 
 ```bash
-streamlit run streamlit_app.py
+streamlit run streamlit_app.py #alternative: python -m streamlit run app.py
 ```
+
+The start of the dashboard follows following structure:
+
+[Flowchart](visuals/flowchart.jpg)
+
+Checking for the existence of the index data and database. Missing data is being downloaded and precomputed for display on the dashboard. Furthermore, the default settings are being applied.
 
 ## Additional resources
 
 [Streamlit documentation](https://docs.streamlit.io/) <br>
 [Yfinance documentation](https://ranaroussi.github.io/yfinance/)
-
-## Dashboard
-
-![Preview](visuals/Dashboard_Demo.gif)
