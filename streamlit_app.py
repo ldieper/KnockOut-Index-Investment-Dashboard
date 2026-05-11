@@ -19,8 +19,8 @@ if get_index_map() == None:
 index_map = get_index_map()
 
 #Defaults for userinput variables
-if "refresh_data" not in st.session_state:
-    st.session_state.refresh_data = False
+#if "refresh_data" not in st.session_state:
+#    st.session_state.refresh_data = False
 
 if "selected_index" not in st.session_state:
     if index_map:
@@ -58,7 +58,7 @@ if st.session_state.selected_index is not None:
 
 
 #Data-Refresh button clicked:
-if st.session_state.refresh_data:
+def data_refresh():
     # Reset flags/state
     st.session_state.simulations_loaded = False
     st.session_state.all_results = {}
@@ -74,19 +74,17 @@ if st.session_state.refresh_data:
 
     #If not all indices are loaded
     if missing_keys: 
-        with st.spinner("Updating data.. " + get_random_phrase()):
+        with st.spinner("Updating data.. "):
             new_results = precompute_all_simulations(keys_to_compute=missing_keys) 
             store_to_db(new_results)
             st.session_state.all_results.update(new_results)
             st.cache_data.clear()
 
-    st.session_state.refresh_data = False #Deactivating button to be cklickable again
+    #st.session_state.refresh_data = False #Deactivating button to be cklickable again
     st.session_state.simulations_loaded = True
 
     # Force rerun
     st.rerun()
-
-
 
 
 #If data is still not loaded: Error
@@ -266,8 +264,9 @@ with mid:
                 )
             
         with st.container(border=False):
-            if st.button("Refresh Data | :material/mouse: 2x"):
-                st.session_state.refresh_data = True
+            if st.button("Refresh Data"):
+                #st.session_state.refresh_data = True
+                data_refresh()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
