@@ -98,7 +98,7 @@ def run_simulation(source, filter, selected_leverage, selected_budget, remaining
             if inv.get_leverage() <= 1.5:
                 closing_value = inv.get_investment_value()
                 inv.reset_investment(type="sell")
-                cumulative_value -= closing_value
+                #cumulative_value -= closing_value
                 closing_date = dates[i]
                 rows.append({
                     "date": dates[i],
